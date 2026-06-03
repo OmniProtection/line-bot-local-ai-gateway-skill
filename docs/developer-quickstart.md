@@ -14,6 +14,10 @@ Do not run `npm install` in this repository unless you explicitly intend to work
 
 ## Clone Repository
 
+The public display name is `LINE Bot Local AI Gateway Skill`. The directory name
+`local-free-line-bot-creator` is the repository slug and legacy identifier used
+for clone paths and compatibility references.
+
 ```bash
 git clone <repo-url>
 cd local-free-line-bot-creator
@@ -134,4 +138,3 @@ These are expected for a fresh template.
 - [`docs/memory-policy.md`](memory-policy.md)
 - [`docs/web-search-safety.md`](web-search-safety.md)
 - [`docs/live-smoke-test.md`](live-smoke-test.md)
-

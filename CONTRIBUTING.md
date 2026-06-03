@@ -1,4 +1,4 @@
-# Contributing
+# Contributing to LINE Bot Local AI Gateway Skill
 
 This repository is in developer alpha. Contributions are welcome when they preserve the local-first, zero-secret, non-official LINE tooling boundary.
 
@@ -60,4 +60,3 @@ Privacy review is required for changes touching:
 - Search query routing to third-party providers.
 
 Security issues should follow [`SECURITY.md`](SECURITY.md), not public issues with sensitive payloads.
-

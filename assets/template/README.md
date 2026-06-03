@@ -1,4 +1,4 @@
-# Local Free LINE Bot
+# LINE Bot Local AI Gateway Template
 
 This is a non-official local-first LINE Bot template. It is not affiliated with, authorized by, sponsored by, or endorsed by LINE Corporation, LY Corporation, or any LINE official product team.
 

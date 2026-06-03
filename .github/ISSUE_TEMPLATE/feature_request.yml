@@ -1,5 +1,5 @@
 name: Feature request
-description: Propose a developer alpha improvement.
+description: Propose a LINE Bot Local AI Gateway Skill developer alpha improvement.
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
@@ -58,4 +58,3 @@ body:
     attributes:
       label: Backwards compatibility
       description: Describe compatibility or migration impact.
-

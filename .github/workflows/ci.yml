@@ -1,4 +1,4 @@
-name: CI
+name: LINE Bot Local AI Gateway Skill CI
 
 on:
   pull_request:
@@ -22,4 +22,3 @@ jobs:
         run: node scripts/verify_linebot_project.js assets/template
       - name: Template syntax check
         run: npm run check --prefix assets/template
-

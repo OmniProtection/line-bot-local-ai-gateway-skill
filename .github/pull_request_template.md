@@ -1,4 +1,4 @@
-# Pull Request
+# LINE Bot Local AI Gateway Skill Pull Request
 
 ## Summary
 
@@ -55,4 +55,3 @@ Describe any impact on LINE identifiers, messages, memory, logs, search queries,
 - [ ] No private tunnel URL.
 - [ ] No deployment, tag, push, or release automation.
 - [ ] No stable, production-ready, or official LINE claim.
-

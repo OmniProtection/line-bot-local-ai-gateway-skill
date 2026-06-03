@@ -1,4 +1,4 @@
-# Support
+# Support for LINE Bot Local AI Gateway Skill
 
 This project is a developer alpha kit. Support is best effort and focused on local-first template usage, zero-secret validation, and documentation clarity.
 
@@ -42,4 +42,3 @@ Do not include:
 - LINE Developers Console screenshots with secrets.
 
 Report security issues using [`SECURITY.md`](SECURITY.md).
-

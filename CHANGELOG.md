@@ -10,11 +10,13 @@ All notable changes to this project will be documented here.
 
 ## v0.1.0-alpha Draft
 
-This is an alpha pre-release draft for the `local-free-line-bot-creator` Skill and bundled template.
+This is an alpha pre-release draft for `LINE Bot Local AI Gateway Skill v0.1.0-alpha`.
+
+`local-free-line-bot-creator` is the repository slug and legacy identifier.
 
 Included:
 
-- Local-first LINE Bot template for a webhook server, LM Studio-compatible local LLM, SQLite memory, and explicit web-search commands.
+- Local-first LINE Bot AI gateway template for a webhook server, LM Studio-compatible local LLM, SQLite memory, and explicit web-search commands.
 - Public hygiene and template verification scripts.
 - Safety documentation for secrets, privacy, memory, web search, and local model boundaries.
 
@@ -26,4 +28,3 @@ Not included:
 - Real LINE Channel Secret, Channel Access Token, reply token, search API key, webhook evidence, or user conversation data.
 
 Fresh template production readiness may reasonably return `BLOCKED` until local runtime, public webhook, LINE smoke tests, backup/restore drill, monitoring, and final approval evidence are completed by the operator.
-

@@ -1,5 +1,5 @@
 name: Question
-description: Ask a usage or documentation question.
+description: Ask a LINE Bot Local AI Gateway Skill usage or documentation question.
 title: "[Question]: "
 labels: ["question"]
 body:
@@ -35,4 +35,3 @@ body:
     attributes:
       label: Redacted command output
       description: Paste only redacted output. Do not include tokens, webhook payloads, DBs, or logs.
-

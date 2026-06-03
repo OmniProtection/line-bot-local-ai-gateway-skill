@@ -1,10 +1,16 @@
-# Local Free LINE Bot Creator
+# LINE Bot Local AI Gateway Skill
 
 Codex Skill + starter template for creating local-first LINE Bot AI gateways with LM Studio, SQLite memory, explicit web search, and safety gates.
 
 本地優先 LINE Bot AI Gateway 的 Codex Skill + Starter Template。
 
-`local-free-line-bot-creator` is a non-official LINE Bot AI Gateway Skill for developers who want a local-first LINE webhook server template with a local LLM, SQLite memory, explicit web-search commands, and pre-public safety checks.
+The public display name is `LINE Bot Local AI Gateway Skill`.
+
+The Chinese display name is `LINE Bot 本地 AI Gateway Skill`.
+
+`local-free-line-bot-creator` is the repository slug, legacy project identifier, and compatibility alias. It is not the public display name.
+
+`LINE Bot Local AI Gateway Skill` is a non-official LINE Bot AI Gateway Skill for developers who want a local-first LINE webhook server template with a local LLM, SQLite memory, explicit web-search commands, and pre-public safety checks.
 
 This project is not affiliated with, authorized by, sponsored by, or endorsed by LINE Corporation, LY Corporation, or any LINE official product team. It is not an official LINE Bot builder and does not replace LINE Developers Console.
 
@@ -198,6 +204,7 @@ Fresh template readiness can reasonably return `BLOCKED` because real runtime an
 - Customization guide: [`docs/customization-guide.md`](docs/customization-guide.md)
 - Release checklist: [`docs/release-checklist.md`](docs/release-checklist.md)
 - Alpha release notes draft: [`docs/releases/v0.1.0-alpha.md`](docs/releases/v0.1.0-alpha.md)
+- Naming policy: [`docs/naming.md`](docs/naming.md)
 - Usage guide: [`docs/guide.md`](docs/guide.md)
 - Architecture: [`docs/architecture.md`](docs/architecture.md)
 - LINE manual setup: [`docs/line-official-setup-guide.md`](docs/line-official-setup-guide.md)
@@ -222,4 +229,3 @@ Fresh template readiness can reasonably return `BLOCKED` because real runtime an
 ## License
 
 Apache License 2.0. See [`LICENSE`](LICENSE).
-

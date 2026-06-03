@@ -28,6 +28,7 @@ const REQUIRED_DOC_FILES = [
   "docs/demo-walkthrough.md",
   "docs/customization-guide.md",
   "docs/release-checklist.md",
+  "docs/naming.md",
   "docs/releases/v0.1.0-alpha.md"
 ];
 const REQUIRED_GITHUB_FILES = [
@@ -44,7 +45,40 @@ const README_LINKS = [
   "docs/live-smoke-test.md",
   "docs/demo-walkthrough.md",
   "docs/customization-guide.md",
-  "docs/release-checklist.md"
+  "docs/release-checklist.md",
+  "docs/naming.md"
+];
+
+const OFFICIAL_DISPLAY_NAME = "LINE Bot Local AI Gateway Skill";
+const README_H1 = `# ${OFFICIAL_DISPLAY_NAME}`;
+const CURRENT_PUBLIC_POSITIONING_FILES = [
+  "README.md",
+  "SKILL.md",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "SUPPORT.md",
+  "SECURITY.md",
+  "PRIVACY.md",
+  "docs/guide.md",
+  "docs/developer-quickstart.md",
+  "docs/live-smoke-test.md",
+  "docs/demo-walkthrough.md",
+  "docs/customization-guide.md",
+  "docs/release-checklist.md",
+  "docs/releases/v0.1.0-alpha.md",
+  ".github/ISSUE_TEMPLATE/bug_report.yml",
+  ".github/ISSUE_TEMPLATE/feature_request.yml",
+  ".github/ISSUE_TEMPLATE/question.yml",
+  ".github/pull_request_template.md",
+  ".github/workflows/ci.yml",
+  "assets/template/README.md"
+];
+const DANGEROUS_PUBLIC_NAMES = [
+  "Official LINE Bot Builder",
+  "LINE 官方 Bot 建立器",
+  "免費 LINE Bot 申請工具",
+  "production-ready LINE Bot framework",
+  "LINE Official Account automation tool"
 ];
 
 const UNSAFE_WORKFLOW_PATTERNS = [
@@ -225,6 +259,83 @@ function checkReadmeReleaseStatements(findings) {
   }
 }
 
+function checkNamingConsistency(findings) {
+  if (!fs.existsSync(ROOT_README)) {
+    addFinding(findings, {
+      type: "missing_required_public_file",
+      file: "README.md"
+    });
+    return;
+  }
+
+  const readme = fs.readFileSync(ROOT_README, "utf8");
+  const readmeLines = readme.split(/\r?\n/);
+  const firstH1 = readmeLines.find((line) => /^#\s+/.test(line.trim()));
+  const lowerReadme = readme.toLowerCase();
+
+  if (firstH1 !== README_H1) {
+    addFinding(findings, {
+      type: "invalid_readme_public_display_name",
+      file: "README.md",
+      expected: README_H1
+    });
+  }
+
+  const slugNoteOk =
+    readme.includes("local-free-line-bot-creator") &&
+    lowerReadme.includes("repository slug") &&
+    lowerReadme.includes("legacy project identifier");
+  if (!slugNoteOk) {
+    addFinding(findings, {
+      type: "missing_readme_repo_slug_legacy_identifier_note",
+      file: "README.md"
+    });
+  }
+
+  const nonOfficialOk =
+    lowerReadme.includes("non-official") &&
+    lowerReadme.includes("not affiliated") &&
+    (lowerReadme.includes("not official") || lowerReadme.includes("not an official"));
+  if (!nonOfficialOk) {
+    addFinding(findings, {
+      type: "missing_readme_non_official_naming_boundary",
+      file: "README.md"
+    });
+  }
+
+  const namingDocPath = path.join(REPO_ROOT, "docs", "naming.md");
+  if (!fs.existsSync(namingDocPath)) {
+    addFinding(findings, {
+      type: "missing_naming_policy",
+      file: "docs/naming.md"
+    });
+  }
+
+  const releaseNotes = readTextIfExists("docs/releases/v0.1.0-alpha.md");
+  if (!releaseNotes.includes(OFFICIAL_DISPLAY_NAME)) {
+    addFinding(findings, {
+      type: "missing_release_notes_official_display_name",
+      file: "docs/releases/v0.1.0-alpha.md"
+    });
+  }
+
+  for (const rel of CURRENT_PUBLIC_POSITIONING_FILES) {
+    const text = readTextIfExists(rel);
+    if (!text) {
+      continue;
+    }
+    for (const forbiddenName of DANGEROUS_PUBLIC_NAMES) {
+      if (text.includes(forbiddenName)) {
+        addFinding(findings, {
+          type: "dangerous_public_positioning_name",
+          file: rel,
+          name: forbiddenName
+        });
+      }
+    }
+  }
+}
+
 function scanSensitivePatterns(findings, filePath, content) {
   const lines = content.split(/\r?\n/);
   for (const rule of SENSITIVE_PATTERNS) {
@@ -308,6 +419,7 @@ function main() {
 
   checkRequiredFiles(findings);
   checkReadmeReleaseStatements(findings);
+  checkNamingConsistency(findings);
   checkWorkflowSafety(findings);
 
   walk(REPO_ROOT, (filePath) => {

@@ -1,6 +1,6 @@
-# local-free-line-bot-creator 使用與創建教學
+# LINE Bot 本地 AI Gateway Skill 使用與創建教學
 
-這份教學說明如何使用 `local-free-line-bot-creator` Skill，建立一個本地優先、免費優先的 LINE Bot。目標是讓使用者用 Codex 產生或審查專案，並保留安全預設：LINE webhook 由本機伺服器處理、LM Studio 保持在本機、SQLite 儲存記憶、web-search 只能由明確指令觸發。
+這份教學說明如何使用 `LINE Bot Local AI Gateway Skill`，建立或審查本地優先 LINE Bot AI gateway 專案。`local-free-line-bot-creator` 是 repo slug / legacy identifier / compatibility alias，不是公開 Display Name。目標是讓使用者用 Codex 產生或審查專案，並保留安全預設：LINE webhook 由本機伺服器處理、LM Studio 保持在本機、SQLite 儲存記憶、web-search 只能由明確指令觸發。
 
 ## Skill 目標與適用情境
 
@@ -40,19 +40,19 @@ docs/
 建立完整本地 LINE Bot：
 
 ```text
-使用 local-free-line-bot-creator，建立一個 LINE Bot，連接 LM Studio，本地 SQLite 記憶，並支援 找: / 搜: / 查: web-search 指令。不要建立真實 .env，不要部署。
+使用 LINE Bot Local AI Gateway Skill，建立一個 LINE Bot AI gateway，連接 LM Studio，本地 SQLite 記憶，並支援 找: / 搜: / 查: web-search 指令。不要建立真實 .env，不要部署。
 ```
 
 審查既有專案：
 
 ```text
-使用 local-free-line-bot-creator，檢查這個 LINE Bot 是否符合：LINE signature verification、Reply API 優先、LM Studio 只走 localhost、沒有 hardcoded secrets、記憶與 web-search 流程安全。
+使用 LINE Bot Local AI Gateway Skill，檢查這個 LINE Bot AI gateway 是否符合：LINE signature verification、Reply API 優先、LM Studio 只走 localhost、沒有 hardcoded secrets、記憶與 web-search 流程安全。
 ```
 
 只建立教學或 README：
 
 ```text
-使用 local-free-line-bot-creator，替這個 LINE Bot 專案產生 GitHub README，包含本機啟動、LINE Console 手動設定、LM Studio 啟動、測試與故障排除。
+使用 LINE Bot Local AI Gateway Skill，替這個 LINE Bot AI gateway 專案產生 GitHub README，包含本機啟動、LINE Console 手動設定、LM Studio 啟動、測試與故障排除。
 ```
 
 ## 從 template 建立 LINE Bot 的流程

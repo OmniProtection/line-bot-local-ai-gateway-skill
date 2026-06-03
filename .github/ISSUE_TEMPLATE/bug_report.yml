@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem without secrets or live evidence.
+description: Report a reproducible LINE Bot Local AI Gateway Skill problem without secrets or live evidence.
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -63,4 +63,3 @@ body:
         - label: This may affect privacy.
         - label: I have removed secrets, tokens, DBs, logs, private webhook payloads, and private tunnel URLs.
           required: true
-

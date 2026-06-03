@@ -1,11 +1,14 @@
 ---
-name: local-free-line-bot-creator
-description: Create, modify, verify, or productionize local-first LINE Bot projects that use LINE Messaging API webhooks, Reply API pending responses, optional Push API final responses, LM Studio local LLMs, SQLite memory, and safe web search. Use when Codex is asked to build a free-first LINE Bot, connect it to a local LLM, add conversation memory, add grounded web-search commands, or audit the project for secrets, routing, and release readiness.
+name: LINE Bot Local AI Gateway Skill
+compatibility_alias: local-free-line-bot-creator
+description: Create, modify, verify, or productionize local-first LINE Bot AI gateway projects that use LINE Messaging API webhooks, Reply API pending responses, optional Push API final responses, LM Studio local LLMs, SQLite memory, explicit web search, and safety gates. Use when Codex is asked to build a local-first LINE Bot AI gateway, connect it to a local LLM, add conversation memory, add grounded web-search commands, or audit the project for secrets, routing, and release readiness.
 ---
 
-# Local Free LINE Bot Creator
+# LINE Bot Local AI Gateway Skill
 
-Use this skill to build and review local-first LINE Bot projects that keep paid services optional and private model traffic on the operator machine.
+`local-free-line-bot-creator` is retained as the repository slug and compatibility alias.
+
+Use this non-official Skill to build and review local-first LINE Bot AI gateway projects that keep paid services optional and private model traffic on the operator machine.
 
 ## Core Rules
 
@@ -15,6 +18,7 @@ Use this skill to build and review local-first LINE Bot projects that keep paid 
 - Prefer LINE Reply API for immediate/pending responses. Use Push API only when the user explicitly asks for background final replies or the existing project already uses that pattern.
 - Do not create LINE Official Accounts, retrieve credentials, log into LINE Console, deploy, install packages, or mutate external systems without explicit approval.
 - Do not copy runtime DBs, logs, backups, or production evidence into generated repos.
+- Do not describe this project as an official LINE tool, SaaS, stable framework, production-ready system, or tooling that automates LINE Official Account creation.
 
 ## Workflow
 
