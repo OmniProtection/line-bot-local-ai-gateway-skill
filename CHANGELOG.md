@@ -12,7 +12,9 @@ All notable changes to this project will be documented here.
 
 This is an alpha pre-release draft for `LINE Bot Local AI Gateway Skill v0.1.0-alpha`.
 
-`local-free-line-bot-creator` is the repository slug and legacy identifier.
+`line-bot-local-ai-gateway-skill` is the current repository slug.
+
+`local-free-line-bot-creator` was the previous repository slug and remains only a legacy identifier / compatibility alias.
 
 Included:
 

@@ -15,12 +15,13 @@ Do not run `npm install` in this repository unless you explicitly intend to work
 ## Clone Repository
 
 The public display name is `LINE Bot Local AI Gateway Skill`. The directory name
-`local-free-line-bot-creator` is the repository slug and legacy identifier used
-for clone paths and compatibility references.
+`line-bot-local-ai-gateway-skill` is the current repository slug used for clone
+paths. `local-free-line-bot-creator` was the previous repository slug and remains
+only a legacy identifier / compatibility alias.
 
 ```bash
 git clone <repo-url>
-cd local-free-line-bot-creator
+cd line-bot-local-ai-gateway-skill
 ```
 
 ## Run Zero-Secret Verifier

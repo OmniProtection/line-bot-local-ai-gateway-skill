@@ -1,12 +1,13 @@
 ---
 name: LINE Bot Local AI Gateway Skill
+repository_slug: line-bot-local-ai-gateway-skill
 compatibility_alias: local-free-line-bot-creator
 description: Create, modify, verify, or productionize local-first LINE Bot AI gateway projects that use LINE Messaging API webhooks, Reply API pending responses, optional Push API final responses, LM Studio local LLMs, SQLite memory, explicit web search, and safety gates. Use when Codex is asked to build a local-first LINE Bot AI gateway, connect it to a local LLM, add conversation memory, add grounded web-search commands, or audit the project for secrets, routing, and release readiness.
 ---
 
 # LINE Bot Local AI Gateway Skill
 
-`local-free-line-bot-creator` is retained as the repository slug and compatibility alias.
+`line-bot-local-ai-gateway-skill` is the current repository slug. `local-free-line-bot-creator` is retained only as the previous repository slug and compatibility alias.
 
 Use this non-official Skill to build and review local-first LINE Bot AI gateway projects that keep paid services optional and private model traffic on the operator machine.
 

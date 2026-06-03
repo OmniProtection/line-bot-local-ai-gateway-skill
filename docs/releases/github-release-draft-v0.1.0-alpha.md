@@ -4,6 +4,8 @@
 
 Developer alpha. Not stable. Not production ready.
 
+Repository: `OmniProtection/line-bot-local-ai-gateway-skill`
+
 ## What this is
 
 A Codex Skill + starter template for creating local-first LINE Bot AI gateways with LM Studio, SQLite memory, explicit web search, and safety gates.

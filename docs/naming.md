@@ -8,11 +8,19 @@ LINE Bot Local AI Gateway Skill
 
 LINE Bot 本地 AI Gateway Skill
 
-## Repository Slug / Legacy Identifier
+## Current Repository Slug
+
+`line-bot-local-ai-gateway-skill`
+
+## Current GitHub Repository
+
+`OmniProtection/line-bot-local-ai-gateway-skill`
+
+## Previous Repository Slug / Legacy Identifier
 
 `local-free-line-bot-creator`
 
-The repository slug may appear in clone paths, historical reports, task names, compatibility aliases, and legacy identifiers. It should not be used as the public display name.
+The previous repository slug may appear in historical reports, past task names, compatibility aliases, and legacy identifiers. It should not be used as the current repository slug or the public display name.
 
 ## Allowed Short Descriptions
 
@@ -36,4 +44,3 @@ The repository slug may appear in clone paths, historical reports, task names, c
 - Always keep the non-official disclaimer.
 - Use LINE only to describe compatibility with LINE Messaging API and LINE Bot use cases.
 - Do not imply LINE Corporation, LY Corporation, or any LINE official product team authorizes, sponsors, endorses, or maintains this project.
-

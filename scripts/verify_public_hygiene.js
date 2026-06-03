@@ -50,6 +50,8 @@ const README_LINKS = [
 ];
 
 const OFFICIAL_DISPLAY_NAME = "LINE Bot Local AI Gateway Skill";
+const CURRENT_REPOSITORY_SLUG = "line-bot-local-ai-gateway-skill";
+const PREVIOUS_REPOSITORY_SLUG = "local-free-line-bot-creator";
 const README_H1 = `# ${OFFICIAL_DISPLAY_NAME}`;
 const CURRENT_PUBLIC_POSITIONING_FILES = [
   "README.md",
@@ -282,14 +284,27 @@ function checkNamingConsistency(findings) {
   }
 
   const slugNoteOk =
-    readme.includes("local-free-line-bot-creator") &&
-    lowerReadme.includes("repository slug") &&
-    lowerReadme.includes("legacy project identifier");
+    readme.includes(CURRENT_REPOSITORY_SLUG) &&
+    lowerReadme.includes("current repository slug");
   if (!slugNoteOk) {
     addFinding(findings, {
-      type: "missing_readme_repo_slug_legacy_identifier_note",
+      type: "missing_readme_current_repo_slug_note",
       file: "README.md"
     });
+  }
+
+  if (readme.includes(PREVIOUS_REPOSITORY_SLUG)) {
+    const previousSlugOk =
+      lowerReadme.includes("previous repository slug") &&
+      (lowerReadme.includes("legacy") ||
+        lowerReadme.includes("historical") ||
+        lowerReadme.includes("compatibility alias"));
+    if (!previousSlugOk) {
+      addFinding(findings, {
+        type: "missing_readme_previous_repo_slug_boundary",
+        file: "README.md"
+      });
+    }
   }
 
   const nonOfficialOk =
@@ -310,12 +325,36 @@ function checkNamingConsistency(findings) {
       file: "docs/naming.md"
     });
   }
+  const namingDoc = readTextIfExists("docs/naming.md");
+  if (
+    !namingDoc.includes(OFFICIAL_DISPLAY_NAME) ||
+    !namingDoc.includes(CURRENT_REPOSITORY_SLUG) ||
+    !namingDoc.includes(PREVIOUS_REPOSITORY_SLUG) ||
+    !namingDoc.toLowerCase().includes("current repository slug") ||
+    !namingDoc.toLowerCase().includes("previous repository slug")
+  ) {
+    addFinding(findings, {
+      type: "incomplete_naming_policy_repo_slug_boundary",
+      file: "docs/naming.md"
+    });
+  }
 
   const releaseNotes = readTextIfExists("docs/releases/v0.1.0-alpha.md");
   if (!releaseNotes.includes(OFFICIAL_DISPLAY_NAME)) {
     addFinding(findings, {
       type: "missing_release_notes_official_display_name",
       file: "docs/releases/v0.1.0-alpha.md"
+    });
+  }
+
+  const githubReleaseDraft = readTextIfExists("docs/releases/github-release-draft-v0.1.0-alpha.md");
+  if (
+    githubReleaseDraft.includes(PREVIOUS_REPOSITORY_SLUG) &&
+    !githubReleaseDraft.toLowerCase().includes("previous repository slug")
+  ) {
+    addFinding(findings, {
+      type: "release_draft_uses_previous_slug_as_current",
+      file: "docs/releases/github-release-draft-v0.1.0-alpha.md"
     });
   }
 

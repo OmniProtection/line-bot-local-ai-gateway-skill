@@ -8,7 +8,11 @@ The public display name is `LINE Bot Local AI Gateway Skill`.
 
 The Chinese display name is `LINE Bot 本地 AI Gateway Skill`.
 
-`local-free-line-bot-creator` is the repository slug, legacy project identifier, and compatibility alias. It is not the public display name.
+The current repository slug is `line-bot-local-ai-gateway-skill`.
+
+The current GitHub repository is `OmniProtection/line-bot-local-ai-gateway-skill`.
+
+`local-free-line-bot-creator` was the previous repository slug, legacy project identifier, and compatibility alias. It is not the current repository slug or the public display name.
 
 `LINE Bot Local AI Gateway Skill` is a non-official LINE Bot AI Gateway Skill for developers who want a local-first LINE webhook server template with a local LLM, SQLite memory, explicit web-search commands, and pre-public safety checks.
 

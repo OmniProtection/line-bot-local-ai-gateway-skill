@@ -1,6 +1,6 @@
 # LINE Bot 本地 AI Gateway Skill 使用與創建教學
 
-這份教學說明如何使用 `LINE Bot Local AI Gateway Skill`，建立或審查本地優先 LINE Bot AI gateway 專案。`local-free-line-bot-creator` 是 repo slug / legacy identifier / compatibility alias，不是公開 Display Name。目標是讓使用者用 Codex 產生或審查專案，並保留安全預設：LINE webhook 由本機伺服器處理、LM Studio 保持在本機、SQLite 儲存記憶、web-search 只能由明確指令觸發。
+這份教學說明如何使用 `LINE Bot Local AI Gateway Skill`，建立或審查本地優先 LINE Bot AI gateway 專案。`line-bot-local-ai-gateway-skill` 是目前 repo slug；`local-free-line-bot-creator` 是 previous repository slug / legacy identifier / compatibility alias，不是目前 repo slug 或公開 Display Name。目標是讓使用者用 Codex 產生或審查專案，並保留安全預設：LINE webhook 由本機伺服器處理、LM Studio 保持在本機、SQLite 儲存記憶、web-search 只能由明確指令觸發。
 
 ## Skill 目標與適用情境
 
