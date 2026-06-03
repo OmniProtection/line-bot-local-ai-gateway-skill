@@ -13,7 +13,7 @@ const STARTUP_DIR = path.join(
   "Programs",
   "Startup"
 );
-const STARTUP_FILE = path.join(STARTUP_DIR, "JARVIS Local Free LINE Bot.cmd");
+const STARTUP_FILE = path.join(STARTUP_DIR, "Local Free LINE Bot.cmd");
 
 function hasFlag(name) {
   return process.argv.includes(name);

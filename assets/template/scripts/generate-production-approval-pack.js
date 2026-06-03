@@ -1,14 +1,8 @@
 const fs = require("fs");
 const path = require("path");
+const { PRODUCTIONIZATION_ROOT } = require("./production-evidence-contract");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const JARVIS_ROOT = path.resolve(PROJECT_ROOT, "..");
-const PRODUCTIONIZATION_ROOT = path.join(
-  JARVIS_ROOT,
-  "docs",
-  "maintenance",
-  "GO-LINEBOT-PRODUCTIONIZATION-001"
-);
 const OUTPUT_PATH = path.join(PRODUCTIONIZATION_ROOT, "approval-execution-plan.md");
 
 const STEPS = [

@@ -1,4 +1,4 @@
-const DEFAULT_PUBLIC_BASE_URL = "https://linebot.sidekick.idv.tw";
+const DEFAULT_PUBLIC_BASE_URL = "";
 const DEFAULT_TIMEOUT_MS = 8000;
 
 function hasFlag(name) {
@@ -84,10 +84,31 @@ async function checkUnsignedWebhook(url, timeoutMs) {
 
 async function main() {
   const baseUrl = normalizeBaseUrl(
-    argValue("--public-base-url", process.env.PUBLIC_BASE_URL || DEFAULT_PUBLIC_BASE_URL)
+    argValue(
+      "--public-base-url",
+      process.env.PUBLIC_WEBHOOK_BASE_URL || process.env.PUBLIC_BASE_URL || DEFAULT_PUBLIC_BASE_URL
+    )
   );
   const timeoutMs = parseTimeoutMs();
   const execute = hasFlag("--execute");
+  if (!baseUrl) {
+    console.log(
+      JSON.stringify(
+        {
+          status: "BLOCKED",
+          mode: execute ? "execute" : "dry_run",
+          execute_required: !execute,
+          public_base_url_required: true,
+          next_action:
+            "Set PUBLIC_WEBHOOK_BASE_URL or pass --public-base-url=https://YOUR-TUNNEL-DOMAIN before running public webhook checks."
+        },
+        null,
+        2
+      )
+    );
+    process.exitCode = execute ? 3 : 0;
+    return;
+  }
   const planned = {
     public_health_url: `${baseUrl}/health`,
     unsigned_webhook_url: `${baseUrl}/webhook`,

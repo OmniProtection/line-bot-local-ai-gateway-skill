@@ -4,9 +4,8 @@ const path = require("path");
 const Database = require("better-sqlite3");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const JARVIS_ROOT = path.resolve(PROJECT_ROOT, "..");
 const SOURCE_DB = path.join(PROJECT_ROOT, "data", "linebot-memory.sqlite");
-const DRILL_ROOT = path.join(JARVIS_ROOT, "backups", "linebot-memory-restore-drill");
+const DRILL_ROOT = path.join(PROJECT_ROOT, "backups", "linebot-memory-restore-drill");
 
 function hasFlag(name) {
   return process.argv.includes(name);
@@ -16,10 +15,10 @@ function timestampForPath() {
   return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
-function assertInsideJarvis(filePath) {
+function assertInsideProject(filePath) {
   const resolved = path.resolve(filePath);
-  if (!resolved.toLowerCase().startsWith(JARVIS_ROOT.toLowerCase() + path.sep.toLowerCase())) {
-    throw new Error(`Refusing to write outside JARVIS root: ${resolved}`);
+  if (!resolved.toLowerCase().startsWith(PROJECT_ROOT.toLowerCase() + path.sep.toLowerCase())) {
+    throw new Error(`Refusing to write outside project root: ${resolved}`);
   }
 }
 
@@ -88,7 +87,7 @@ async function main() {
     return;
   }
 
-  assertInsideJarvis(drillDbPath);
+  assertInsideProject(drillDbPath);
   fs.mkdirSync(drillDir, { recursive: true });
   fs.copyFileSync(SOURCE_DB, drillDbPath);
   const summary = await buildSummary("execute", drillDbPath);

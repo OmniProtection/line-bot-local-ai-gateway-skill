@@ -3,13 +3,6 @@ const { execFile } = require("child_process");
 const { evidenceStatus, scanEvidenceSecrets } = require("./production-evidence-contract");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const JARVIS_ROOT = path.resolve(PROJECT_ROOT, "..");
-const PRODUCTIONIZATION_ROOT = path.join(
-  JARVIS_ROOT,
-  "docs",
-  "maintenance",
-  "GO-LINEBOT-PRODUCTIONIZATION-001"
-);
 function runReadinessAudit() {
   return new Promise((resolve) => {
     execFile(

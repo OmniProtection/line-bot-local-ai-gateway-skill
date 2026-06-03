@@ -1,16 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
-const { scanEvidenceSecrets } = require("./production-evidence-contract");
+const { PRODUCTIONIZATION_ROOT, scanEvidenceSecrets } = require("./production-evidence-contract");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const JARVIS_ROOT = path.resolve(PROJECT_ROOT, "..");
-const PRODUCTIONIZATION_ROOT = path.join(
-  JARVIS_ROOT,
-  "docs",
-  "maintenance",
-  "GO-LINEBOT-PRODUCTIONIZATION-001"
-);
 const TASK_BACKLOG = path.join(PRODUCTIONIZATION_ROOT, "task-backlog.md");
 
 function execNodeScript(script, args = []) {
@@ -39,6 +32,18 @@ function execNodeScript(script, args = []) {
 }
 
 function parseTaskBacklog() {
+  if (!fs.existsSync(TASK_BACKLOG)) {
+    return [
+      {
+        id: "LINEBOT-P0-DOCS",
+        task: "Productionization docs pack is missing.",
+        status: "BLOCKED",
+        acceptance_criteria: "Template docs exist under docs/maintenance/GO-LINEBOT-PRODUCTIONIZATION-001.",
+        evidence_required: "task-backlog.md"
+      }
+    ];
+  }
+
   const markdown = fs.readFileSync(TASK_BACKLOG, "utf8");
   const tasks = [];
   for (const line of markdown.split(/\r?\n/)) {

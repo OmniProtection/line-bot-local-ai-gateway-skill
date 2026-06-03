@@ -6,7 +6,7 @@ const path = require("path");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const TASKS = {
   runtime: {
-    name: "JARVIS Local Free LINE Bot",
+    name: process.env.LINEBOT_RUNTIME_TASK_NAME || "Local Free LINE Bot Runtime",
     schedule: "ONLOGON",
     command: `cmd.exe /d /c "cd /d ${PROJECT_ROOT} && npm start"`,
     retry: {
@@ -15,7 +15,7 @@ const TASKS = {
     }
   },
   health: {
-    name: "JARVIS Local Free LINE Bot Health Check",
+    name: process.env.LINEBOT_HEALTH_TASK_NAME || "Local Free LINE Bot Health Check",
     schedule: "MINUTE",
     modifier: "5",
     command: `cmd.exe /d /c "cd /d ${PROJECT_ROOT} && npm run prod:health:local -- --write-log"`,
@@ -92,7 +92,7 @@ function buildTaskXml(task) {
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>JARVIS local-free-line-bot production ${xmlEscape(task.schedule)} task.</Description>
+    <Description>local-free-line-bot production ${xmlEscape(task.schedule)} task.</Description>
   </RegistrationInfo>
   <Triggers>
     ${trigger}

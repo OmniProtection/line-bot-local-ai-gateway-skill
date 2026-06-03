@@ -1,0 +1,8 @@
+{
+  "status": "BLOCKED",
+  "approved": false,
+  "recorded_at": null,
+  "evidence_summary": "BLOCKED: LINE Console webhook URL evidence has not been recorded.",
+  "secret_free": true,
+  "id": "gate-b-line-console"
+}
