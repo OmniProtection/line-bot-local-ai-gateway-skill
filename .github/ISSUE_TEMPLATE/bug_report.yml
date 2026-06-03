@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible problem without secrets or live evidence.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste LINE Channel Secret, Access Token, replyToken, search API key, real webhook payloads, SQLite DBs, logs, or private tunnel URLs.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Node version, LM Studio status, and whether this is zero-secret validation or live LINE setup.
+      placeholder: "OS: ...\nNode: ...\nLM Studio: running/not running\nMode: zero-secret/live LINE"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List steps using redacted values only.
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: Commands run
+      description: Include exact commands and redacted output.
+      placeholder: "node scripts/verify_public_hygiene.js"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs or output
+      description: Do not upload DBs, raw logs, tokens, replyToken, or unredacted webhook payloads.
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Security and privacy impact
+      options:
+        - label: This may affect security.
+        - label: This may affect privacy.
+        - label: I have removed secrets, tokens, DBs, logs, private webhook payloads, and private tunnel URLs.
+          required: true
+

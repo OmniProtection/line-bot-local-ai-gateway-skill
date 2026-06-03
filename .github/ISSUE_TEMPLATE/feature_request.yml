@@ -1,0 +1,61 @@
+name: Feature request
+description: Propose a developer alpha improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, live LINE evidence, real webhook payloads, SQLite DBs, logs, or private tunnel URLs.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What developer problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      options:
+        - README/docs
+        - Skill workflow
+        - Template source
+        - Memory
+        - Web search
+        - Local LLM
+        - Verifier/CI
+        - GitHub community files
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security impact
+      description: Does this touch signature verification, secrets, SSRF, prompt injection, remote LLM, or CI?
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy impact
+      description: Does this touch LINE identifiers, messages, memory, logs, search queries, or evidence?
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Backwards compatibility
+      description: Describe compatibility or migration impact.
+

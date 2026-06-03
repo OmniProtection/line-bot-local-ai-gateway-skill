@@ -15,8 +15,47 @@ const FORBIDDEN_TEXT = [
 const EXCLUDED_DIRS = new Set([".git", ".github", "node_modules"]);
 const FORBIDDEN_TEMPLATE_DIRS = new Set(["data", "logs", "backups", "node_modules"]);
 const FORBIDDEN_TEMPLATE_EXTENSIONS = new Set([".sqlite", ".db"]);
-const REQUIRED_ROOT_FILES = ["SECURITY.md", "PRIVACY.md", "CHANGELOG.md"];
+const REQUIRED_ROOT_FILES = [
+  "SECURITY.md",
+  "PRIVACY.md",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "SUPPORT.md"
+];
+const REQUIRED_DOC_FILES = [
+  "docs/developer-quickstart.md",
+  "docs/live-smoke-test.md",
+  "docs/demo-walkthrough.md",
+  "docs/customization-guide.md",
+  "docs/release-checklist.md",
+  "docs/releases/v0.1.0-alpha.md"
+];
+const REQUIRED_GITHUB_FILES = [
+  ".github/ISSUE_TEMPLATE/bug_report.yml",
+  ".github/ISSUE_TEMPLATE/feature_request.yml",
+  ".github/ISSUE_TEMPLATE/question.yml",
+  ".github/pull_request_template.md",
+  ".github/workflows/ci.yml"
+];
 const REQUIRED_TEMPLATE_FILES = [".gitignore", ".env.example"];
+const README_LINKS = [
+  "docs/developer-quickstart.md",
+  "docs/releases/v0.1.0-alpha.md",
+  "docs/live-smoke-test.md",
+  "docs/demo-walkthrough.md",
+  "docs/customization-guide.md",
+  "docs/release-checklist.md"
+];
+
+const UNSAFE_WORKFLOW_PATTERNS = [
+  { type: "deployment_command", pattern: /\b(deploy|vercel|netlify|render|cloudflare|wrangler)\b/i },
+  { type: "release_command", pattern: /\b(gh\s+release|npm\s+publish)\b/i },
+  { type: "tag_command", pattern: /\bgit\s+tag\b/i },
+  { type: "push_command", pattern: /\bgit\s+push\b|\bdocker\s+push\b/i },
+  { type: "live_line_command", pattern: /\b(live\s+line|line\s+smoke|test:lmstudio-live)\b/i },
+  { type: "prod_readiness_blocking_command", pattern: /prod:readiness/i },
+  { type: "env_required_command", pattern: /\.env|PUBLIC_WEBHOOK_BASE_URL|LINE_CHANNEL_SECRET|LINE_CHANNEL_ACCESS_TOKEN/i }
+];
 
 const SENSITIVE_PATTERNS = [
   {
@@ -99,6 +138,24 @@ function checkRequiredFiles(findings) {
     }
   }
 
+  for (const rel of REQUIRED_DOC_FILES) {
+    if (!fs.existsSync(path.join(REPO_ROOT, rel))) {
+      addFinding(findings, {
+        type: "missing_required_developer_doc",
+        file: rel
+      });
+    }
+  }
+
+  for (const rel of REQUIRED_GITHUB_FILES) {
+    if (!fs.existsSync(path.join(REPO_ROOT, rel))) {
+      addFinding(findings, {
+        type: "missing_required_github_file",
+        file: rel
+      });
+    }
+  }
+
   for (const rel of REQUIRED_TEMPLATE_FILES) {
     if (!fs.existsSync(path.join(TEMPLATE_ROOT, rel))) {
       addFinding(findings, {
@@ -130,6 +187,11 @@ function checkReadmeReleaseStatements(findings) {
   const remoteLlmOk =
     text.includes("remote llm") &&
     (text.includes("unsafe") || text.includes("manual approval required"));
+  const alphaOk =
+    text.includes("v0.1.0-alpha") &&
+    text.includes("not production ready") &&
+    (text.includes("not stable") || text.includes("stable"));
+  const developerQuickstartOk = README_LINKS.every((link) => text.includes(link.toLowerCase()));
 
   if (!unofficialOk) {
     addFinding(findings, {
@@ -146,6 +208,18 @@ function checkReadmeReleaseStatements(findings) {
   if (!remoteLlmOk) {
     addFinding(findings, {
       type: "missing_readme_remote_llm_warning",
+      file: "README.md"
+    });
+  }
+  if (!alphaOk) {
+    addFinding(findings, {
+      type: "missing_readme_alpha_not_production_ready_statement",
+      file: "README.md"
+    });
+  }
+  if (!developerQuickstartOk) {
+    addFinding(findings, {
+      type: "missing_readme_developer_alpha_links",
       file: "README.md"
     });
   }
@@ -167,11 +241,74 @@ function scanSensitivePatterns(findings, filePath, content) {
   }
 }
 
+function readTextIfExists(rel) {
+  const filePath = path.join(REPO_ROOT, rel);
+  if (!fs.existsSync(filePath)) {
+    return "";
+  }
+  return fs.readFileSync(filePath, "utf8");
+}
+
+function checkWorkflowSafety(findings) {
+  const workflowsDir = path.join(REPO_ROOT, ".github", "workflows");
+  if (!fs.existsSync(workflowsDir)) {
+    addFinding(findings, {
+      type: "missing_github_workflows_directory",
+      path: ".github/workflows"
+    });
+    return;
+  }
+
+  for (const entry of fs.readdirSync(workflowsDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !/\.(ya?ml)$/i.test(entry.name)) {
+      continue;
+    }
+
+    const rel = path.join(".github", "workflows", entry.name);
+    const text = readTextIfExists(rel);
+    const lines = text.split(/\r?\n/);
+
+    for (const [index, line] of lines.entries()) {
+      const trimmed = line.trim();
+      const isRunLine = /^run:\s*/.test(trimmed) || /^\s{8,}\S/.test(line);
+      if (!isRunLine) {
+        continue;
+      }
+
+      for (const rule of UNSAFE_WORKFLOW_PATTERNS) {
+        if (rule.pattern.test(trimmed)) {
+          addFinding(findings, {
+            type: rule.type,
+            file: rel,
+            line: index + 1
+          });
+        }
+      }
+    }
+  }
+
+  const ciText = readTextIfExists(".github/workflows/ci.yml");
+  for (const requiredCommand of [
+    "node scripts/verify_public_hygiene.js",
+    "node scripts/verify_linebot_project.js assets/template",
+    "npm run check --prefix assets/template"
+  ]) {
+    if (!ciText.includes(requiredCommand)) {
+      addFinding(findings, {
+        type: "ci_missing_required_non_live_command",
+        file: ".github/workflows/ci.yml",
+        command: requiredCommand
+      });
+    }
+  }
+}
+
 function main() {
   const findings = [];
 
   checkRequiredFiles(findings);
   checkReadmeReleaseStatements(findings);
+  checkWorkflowSafety(findings);
 
   walk(REPO_ROOT, (filePath) => {
     if (!isTextReadable(filePath)) {

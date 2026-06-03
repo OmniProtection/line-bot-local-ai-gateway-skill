@@ -1,0 +1,38 @@
+name: Question
+description: Ask a usage or documentation question.
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste secrets, LINE Channel Secret, Access Token, replyToken, search API key, real webhook payloads, SQLite DBs, logs, or private tunnel URLs.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you trying to do?
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Which doc did you follow?
+      placeholder: "docs/developer-quickstart.md"
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Node version, LM Studio status, and zero-secret/live LINE mode.
+  - type: textarea
+    id: output
+    attributes:
+      label: Redacted command output
+      description: Paste only redacted output. Do not include tokens, webhook payloads, DBs, or logs.
+
