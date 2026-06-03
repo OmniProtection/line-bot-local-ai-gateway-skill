@@ -3,6 +3,7 @@ const path = require("path");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const TEMPLATE_ROOT = path.join(REPO_ROOT, "assets", "template");
+const ROOT_README = path.join(REPO_ROOT, "README.md");
 
 const FORBIDDEN_TEXT = [
   ["sidekick", ".", "idv", ".", "tw"].join(""),
@@ -14,6 +15,35 @@ const FORBIDDEN_TEXT = [
 const EXCLUDED_DIRS = new Set([".git", ".github", "node_modules"]);
 const FORBIDDEN_TEMPLATE_DIRS = new Set(["data", "logs", "backups", "node_modules"]);
 const FORBIDDEN_TEMPLATE_EXTENSIONS = new Set([".sqlite", ".db"]);
+const REQUIRED_ROOT_FILES = ["SECURITY.md", "PRIVACY.md", "CHANGELOG.md"];
+const REQUIRED_TEMPLATE_FILES = [".gitignore", ".env.example"];
+
+const SENSITIVE_PATTERNS = [
+  {
+    type: "local_absolute_path",
+    pattern: /(?:^|[^A-Za-z])(?:[A-Z]:\\Users\\|[A-Z]:\\[^ \t\r\n"'<>|]+\\)/g
+  },
+  {
+    type: "personal_tunnel_url",
+    pattern: /https?:\/\/[A-Za-z0-9.-]*(?:ngrok-free\.app|ngrok\.io|trycloudflare\.com|loca\.lt|localtunnel\.me)\b/gi
+  },
+  {
+    type: "line_access_token_literal",
+    pattern: /(?:Bearer\s+|LINE_CHANNEL_ACCESS_TOKEN\s*=\s*)[A-Za-z0-9+/=_-]{40,}/g
+  },
+  {
+    type: "line_channel_secret_literal",
+    pattern: /(?:LINE_CHANNEL_SECRET\s*=\s*|channel[_-]?secret\s*[:=]\s*)[A-Za-z0-9]{20,}/gi
+  },
+  {
+    type: "reply_token_literal",
+    pattern: /replyToken\s*[:=]\s*["'][A-Za-z0-9+/=_-]{20,}["']/g
+  },
+  {
+    type: "generic_api_key_literal",
+    pattern: /(?:SEARCH_API_KEY|API_KEY|api[_-]?key)\s*[:=]\s*["']?[A-Za-z0-9_-]{24,}/gi
+  }
+];
 
 function walk(root, visit) {
   if (!fs.existsSync(root)) {
@@ -51,8 +81,97 @@ function isTextReadable(filePath) {
   return ![".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".zip"].includes(ext);
 }
 
+function relative(filePath) {
+  return path.relative(REPO_ROOT, filePath);
+}
+
+function addFinding(findings, item) {
+  findings.push(item);
+}
+
+function checkRequiredFiles(findings) {
+  for (const rel of REQUIRED_ROOT_FILES) {
+    if (!fs.existsSync(path.join(REPO_ROOT, rel))) {
+      addFinding(findings, {
+        type: "missing_required_public_file",
+        file: rel
+      });
+    }
+  }
+
+  for (const rel of REQUIRED_TEMPLATE_FILES) {
+    if (!fs.existsSync(path.join(TEMPLATE_ROOT, rel))) {
+      addFinding(findings, {
+        type: "missing_required_template_file",
+        file: path.join("assets", "template", rel)
+      });
+    }
+  }
+}
+
+function checkReadmeReleaseStatements(findings) {
+  if (!fs.existsSync(ROOT_README)) {
+    addFinding(findings, {
+      type: "missing_required_public_file",
+      file: "README.md"
+    });
+    return;
+  }
+
+  const text = fs.readFileSync(ROOT_README, "utf8").toLowerCase();
+  const unofficialOk =
+    text.includes("non-official") ||
+    text.includes("not affiliated") ||
+    text.includes("not an official");
+  const freeScopeOk =
+    text.includes("free does not mean") ||
+    text.includes("not mean") && text.includes("free or unlimited") ||
+    text.includes("costs, limits, and terms");
+  const remoteLlmOk =
+    text.includes("remote llm") &&
+    (text.includes("unsafe") || text.includes("manual approval required"));
+
+  if (!unofficialOk) {
+    addFinding(findings, {
+      type: "missing_readme_unofficial_statement",
+      file: "README.md"
+    });
+  }
+  if (!freeScopeOk) {
+    addFinding(findings, {
+      type: "missing_readme_free_scope_statement",
+      file: "README.md"
+    });
+  }
+  if (!remoteLlmOk) {
+    addFinding(findings, {
+      type: "missing_readme_remote_llm_warning",
+      file: "README.md"
+    });
+  }
+}
+
+function scanSensitivePatterns(findings, filePath, content) {
+  const lines = content.split(/\r?\n/);
+  for (const rule of SENSITIVE_PATTERNS) {
+    for (const [index, line] of lines.entries()) {
+      rule.pattern.lastIndex = 0;
+      if (rule.pattern.test(line)) {
+        addFinding(findings, {
+          type: rule.type,
+          file: relative(filePath),
+          line: index + 1
+        });
+      }
+    }
+  }
+}
+
 function main() {
   const findings = [];
+
+  checkRequiredFiles(findings);
+  checkReadmeReleaseStatements(findings);
 
   walk(REPO_ROOT, (filePath) => {
     if (!isTextReadable(filePath)) {
@@ -63,18 +182,19 @@ function main() {
       if (content.includes(value)) {
         findings.push({
           type: "forbidden_text",
-          file: path.relative(REPO_ROOT, filePath),
-          value
+          file: relative(filePath),
+          value_type: "repository_specific_forbidden_text"
         });
       }
     }
+    scanSensitivePatterns(findings, filePath, content);
   });
 
   walkTemplateEntries(TEMPLATE_ROOT, (filePath, entry) => {
     if (entry.isDirectory() && FORBIDDEN_TEMPLATE_DIRS.has(entry.name)) {
       findings.push({
         type: "forbidden_runtime_directory",
-        path: path.relative(REPO_ROOT, filePath)
+        path: relative(filePath)
       });
     }
     if (entry.isFile()) {
@@ -82,7 +202,7 @@ function main() {
       if (entry.name === ".env" || FORBIDDEN_TEMPLATE_EXTENSIONS.has(ext)) {
         findings.push({
           type: "forbidden_runtime_file",
-          path: path.relative(REPO_ROOT, filePath)
+          path: relative(filePath)
         });
       }
     }

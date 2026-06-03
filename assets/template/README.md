@@ -1,5 +1,9 @@
 # Local Free LINE Bot
 
+This is a non-official local-first LINE Bot template. It is not affiliated with, authorized by, sponsored by, or endorsed by LINE Corporation, LY Corporation, or any LINE official product team.
+
+Free means the local template is intended to be free and open source for local use. It does not mean LINE Official Account features, message quotas, hosting, domains, SSL, tunnels, search APIs, or third-party infrastructure are free or unlimited.
+
 Local-first LINE Bot MVP using Node.js, Express, LINE Messaging API Reply API, LINE Push API for background final replies, and LM Studio through its OpenAI-compatible local API.
 
 ## Architecture
@@ -13,6 +17,8 @@ The webhook server is the public gateway. Keep LM Studio private on your machine
 The webhook endpoint returns HTTP 2xx immediately after LINE signature verification, then processes each event. Short general chats can attempt a direct Reply when they fit the configured length gate and finish within the direct model timeout. Other normal model conversations first send `GENERAL_PENDING_REPLY_TEXT`, then send the final LM Studio answer through LINE Push API to the same user, group, or room.
 
 Optional web search is disabled by default. When enabled, only messages that begin with `找:`, `搜:`, or `查:` use the web-search path. The bot replies immediately with the configured search pending text, then sends the finished sourced answer through LINE Push API. LINE web search uses deterministic web evidence first, then LM Studio summarizes that evidence; the experimental LM Studio `npacker/web-tools` path is not part of the LINE runtime search path because it can time out independently.
+
+Remote LLM endpoints are unsafe by default. Changing `LOCAL_MODEL_BASE_URL` away from `localhost` or `127.0.0.1` can send LINE message content, memory context, or search evidence away from the operator machine and requires explicit manual approval.
 
 ## Defaults
 
@@ -71,6 +77,8 @@ Optional web search is disabled by default. When enabled, only messages that beg
    ```text
    https://YOUR-TUNNEL-DOMAIN/webhook
    ```
+
+This template does not create a LINE Official Account, log in to LINE Developers Console, retrieve Channel Secret or Access Token, create a public HTTPS endpoint, or deploy hosting. Complete those official and infrastructure steps manually.
 
 ## Environment
 
@@ -159,3 +167,13 @@ Search answers should keep source links clickable, using Markdown link format su
 ## Limits
 
 This MVP does not create a LINE Official Account, retrieve credentials, configure LINE Developers Console, install tunnel tools, deploy hosting, or guarantee model quality.
+
+## Related Safety Docs
+
+- Root README: `../../README.md`
+- Privacy policy: `../../PRIVACY.md`
+- Security policy: `../../SECURITY.md`
+- Memory policy: `../../docs/memory-policy.md`
+- Web-search safety: `../../docs/web-search-safety.md`
+- LINE manual setup: `../../docs/line-official-setup-guide.md`
+- Local LLM setup: `../../docs/local-llm-setup.md`

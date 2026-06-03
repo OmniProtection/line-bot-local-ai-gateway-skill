@@ -6,6 +6,7 @@ const root = path.resolve(process.argv[2] || ".");
 const requiredFiles = [
   "package.json",
   ".env.example",
+  ".gitignore",
   "README.md",
   "src/server.js",
   "src/config.js",
@@ -50,6 +51,9 @@ checkText("src/server.js", [
   { rule: "health_endpoint", pattern: /app\.get\(["']\/health["']/ },
   { rule: "webhook_endpoint", pattern: /app\.post\(["']\/webhook["']/ },
   { rule: "line_middleware", pattern: /middlewareFactory\(config\)|createLineMiddleware/ },
+  { rule: "signature_error_classifier", pattern: /isSignatureValidationError/ },
+  { rule: "invalid_signature_response", pattern: /invalid_signature/ },
+  { rule: "signature_error_before_event_processing", pattern: /app\.post\(["']\/webhook["'][\s\S]+middlewareFactory\(config\)[\s\S]+enqueueWebhookEvent/ },
   { rule: "memory_command_before_general_model", pattern: /parseMemoryCommand[\s\S]+handleMemoryCommand[\s\S]+parseWebSearchCommand[\s\S]+handleGeneralConversation/ },
   { rule: "group_no_mention_guard", pattern: /group_message_ignored_no_self_mention/ }
 ]);
@@ -62,6 +66,8 @@ checkText("src/config.js", [
 ]);
 
 checkText("src/lineClient.js", [
+  { rule: "line_sdk_middleware", pattern: /line\.middleware/ },
+  { rule: "channel_secret_for_middleware", pattern: /channelSecret:\s*config\.lineChannelSecret/ },
   { rule: "reply_api", pattern: /replyMessage/ },
   { rule: "push_api", pattern: /pushMessage/ }
 ]);
@@ -75,6 +81,14 @@ checkText("src/memoryStore.js", [
 
 checkText("src/webSearchCommand.js", [
   { rule: "explicit_search_prefixes", pattern: /找\|搜\|查/ }
+]);
+
+checkText(".gitignore", [
+  { rule: "ignore_env", pattern: /^\.env$/m },
+  { rule: "keep_env_example", pattern: /^!\.env\.example$/m },
+  { rule: "ignore_sqlite", pattern: /\*\.sqlite/ },
+  { rule: "ignore_node_modules", pattern: /^node_modules\//m },
+  { rule: "ignore_tunnel_configs", pattern: /ngrok\.yml[\s\S]+cloudflared\.yml|cloudflared\.yml[\s\S]+ngrok\.yml/ }
 ]);
 
 const safeEnv = exists(".env.example") ? read(".env.example") : "";
@@ -105,5 +119,17 @@ for (const file of files) {
 }
 
 const status = findings.length === 0 ? "PASS" : "FAIL";
-console.log(JSON.stringify({ status, root, checked_files: files.length, findings }, null, 2));
+console.log(
+  JSON.stringify(
+    {
+      status,
+      root,
+      checked_files: files.length,
+      signature_gate: "STATIC_VERIFIED",
+      findings
+    },
+    null,
+    2
+  )
+);
 process.exit(status === "PASS" ? 0 : 1);
