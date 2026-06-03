@@ -10,6 +10,8 @@ Codex skill for creating and reviewing local-first LINE Bot projects that use:
 
 The bundled template is under `assets/template`. It is intentionally free of runtime secrets and local artifacts.
 
+Full Traditional Chinese usage and project creation guide: [`docs/guide.md`](docs/guide.md).
+
 ## Repository Layout
 
 ```text
