@@ -1,0 +1,51 @@
+{
+  "name": "local-free-line-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first LINE Bot MVP using Reply API and LM Studio.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/config.js && node --check src/directReplyGate.js && node --check src/logger.js && node --check src/lineClient.js && node --check src/lmStudioClient.js && node --check src/memoryStore.js && node --check src/replyPolicy.js && node --check src/webSearchCommand.js && node --check src/webSearchPolicy.js && node --check src/webSearchSecurity.js && node --check src/webSearchService.js && node --check src/server.js && node --check scripts/audit-linebot-runtime-logs.js && node --check scripts/backup-sqlite-memory.js && node --check scripts/diagnose-lmstudio-empty-response.js && node --check scripts/diagnose-lmstudio-stability-matrix.js && node --check scripts/diagnose-local-model-chat.js && node --check scripts/generate-production-approval-pack.js && node --check scripts/generate-production-approval-queue.js && node --check scripts/generate-production-readiness-report.js && node --check scripts/generate-production-task-board.js && node --check scripts/initialize-production-evidence-records.js && node --check scripts/manage-runtime.js && node --check scripts/production-evidence-contract.js && node --check scripts/production-evidence-secret-audit.js && node --check scripts/production-evidence-status.js && node --check scripts/production-go-live-gate.js && node --check scripts/production-health-check.js && node --check scripts/production-readiness-audit.js && node --check scripts/public-webhook-check.js && node --check scripts/register-production-scheduled-task.js && node --check scripts/register-startup-folder-fallback.js && node --check scripts/restore-sqlite-memory-drill.js && node --check scripts/summarize-runtime-log.js && node --check scripts/test-lmstudio-live-smoke.js && node --check scripts/test-line-routing-matrix.js && node --check scripts/test-memory-relevance-gate.js && node --check scripts/test-line-event-log.js && node --check scripts/test-memory-webhook-flow-static.js && node --check scripts/test-memory-safety-static.js && node --check scripts/test-web-search-security.js && node --check scripts/test-web-search-policy.js && node --check scripts/test-web-search-command.js && node --check scripts/test-web-search-flow-static.js && node --check scripts/test-web-search-runtime.js",
+    "test:line-routing": "node scripts/test-line-routing-matrix.js",
+    "test:lmstudio-live": "node scripts/test-lmstudio-live-smoke.js",
+    "audit:runtime-logs": "node scripts/audit-linebot-runtime-logs.js",
+    "prod:health": "node scripts/production-health-check.js",
+    "prod:health:local": "node scripts/production-health-check.js --skip-public",
+    "prod:health:local:log": "node scripts/production-health-check.js --skip-public --write-log",
+    "prod:runtime:status": "node scripts/manage-runtime.js --action=status",
+    "prod:runtime:start:dry-run": "node scripts/manage-runtime.js --action=start",
+    "prod:runtime:stop:dry-run": "node scripts/manage-runtime.js --action=stop",
+    "prod:runtime:restart:dry-run": "node scripts/manage-runtime.js --action=restart",
+    "prod:task:runtime:dry-run": "node scripts/register-production-scheduled-task.js --task=runtime",
+    "prod:task:health:dry-run": "node scripts/register-production-scheduled-task.js --task=health",
+    "prod:startup:runtime:dry-run": "node scripts/register-startup-folder-fallback.js",
+    "prod:startup:runtime:execute": "node scripts/register-startup-folder-fallback.js --execute",
+    "prod:public:dry-run": "node scripts/public-webhook-check.js",
+    "prod:public:execute": "node scripts/public-webhook-check.js --execute",
+    "prod:readiness": "node scripts/production-readiness-audit.js",
+    "prod:report": "node scripts/generate-production-readiness-report.js",
+    "prod:approval-pack": "node scripts/generate-production-approval-pack.js",
+    "prod:approval-queue": "node scripts/generate-production-approval-queue.js",
+    "prod:tasks": "node scripts/generate-production-task-board.js",
+    "prod:evidence:init": "node scripts/initialize-production-evidence-records.js",
+    "prod:evidence:status": "node scripts/production-evidence-status.js",
+    "prod:evidence:secret-audit": "node scripts/production-evidence-secret-audit.js",
+    "prod:go-live": "node scripts/production-go-live-gate.js",
+    "prod:backup:dry-run": "node scripts/backup-sqlite-memory.js --dry-run",
+    "prod:backup:execute": "node scripts/backup-sqlite-memory.js --execute",
+    "prod:restore-drill:dry-run": "node scripts/restore-sqlite-memory-drill.js",
+    "prod:restore-drill:execute": "node scripts/restore-sqlite-memory-drill.js --execute",
+    "test:web-search": "node scripts/test-web-search-security.js && node scripts/test-web-search-policy.js && node scripts/test-web-search-command.js && node scripts/test-web-search-flow-static.js && node scripts/test-web-search-runtime.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@line/bot-sdk": "^11.0.0",
+    "better-sqlite3": "^12.10.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

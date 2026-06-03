@@ -1,0 +1,7 @@
+interface:
+  display_name: "Local Free LINE Bot Creator"
+  short_description: "Build local-first LINE Bots with LM Studio"
+  default_prompt: "Use $local-free-line-bot-creator to create a local-first LINE Bot with LM Studio, SQLite memory, and safe web search."
+
+policy:
+  allow_implicit_invocation: true
