@@ -199,38 +199,58 @@ Remote LLM unsafe / manual approval required。
 
 ## Memory 指令摘要
 
-目前 template 支援：
+目前 template 已實作的聊天指令只有三個：
 
-- `記住:` 儲存目前 conversation scope 的手動記憶。
-- `忘記:` 刪除目前 scope 內符合條件的手動記憶。
-- `列出記憶` 列出受限制數量的手動記憶。
+| 指令 | 狀態 | 行為 |
+| --- | --- | --- |
+| `記住: 內容` / `記住：內容` | 已實作 | 將內容清理後，存為目前 conversation scope 的 manual memory。 |
+| `忘記: 關鍵字` / `忘記：關鍵字` | 已實作 | 刪除目前 scope 內符合關鍵字的 manual memory。 |
+| `列出記憶` | 已實作 | 列出目前 scope 內受長度限制的 manual memories。 |
 
-Memory command 優先於 LLM chat 與 WebSearch。
+尚未實作，不能在文件中當成已支援功能：
 
-Memory 設計重點：
+- `查詢記憶`：Not implemented，planned。
+- `匯出記憶`：Not implemented；目前只能由 operator manual-only 檢視 / 備份本機 SQLite。
+- `刪除全部記憶` / 刪除目前 scope 全部記憶：Not implemented，planned。
+- 刪除全部本機 memory DB：manual-only，需停 bot 後由 operator 刪除本機 SQLite 與 approved backups。
 
-- SQLite runtime DB 不得 commit。
-- line event log / memory store 屬於本機資料。
-- group memory 需要明確策略與安全邊界。
-- unsend / duplicate event 需要避免污染 memory。
-- relevance gate 應避免無關記憶注入回答。
+Memory command 優先於 LLM chat 與 WebSearch。例如 `記住: 查: 測試` 會被當作記憶指令，不會觸發搜尋。
+
+Memory runtime / template 能力包含：
+
+- SQLite runtime DB；不得 commit。
+- line event log / memory store；屬於本機資料。
+- duplicate webhook event handling，避免重複處理污染 memory。
+- unsend / delete event handling strategy。
+- relevance gate，避免無關記憶注入回答。
+- group / room / private routing，以及群組未 mention 時的處理策略。
+- rolling summary / group summary template capability。
 
 詳細政策見 [`docs/memory-policy.md`](docs/memory-policy.md)。
 
 ## WebSearch 指令摘要
 
-WebSearch 預設關閉。啟用後，明確指令可觸發搜尋：
+WebSearch 預設關閉：`WEB_SEARCH_ENABLED=false`。啟用後，明確指令支援：
 
-```text
-找: query
-搜: query
-查: query
-```
+| 指令 | 狀態 | 行為 |
+| --- | --- | --- |
+| `找: query` / `找：query` | 已實作 | 對 query 執行 WebSearch。 |
+| `搜: query` / `搜：query` | 已實作 | 對 query 執行 WebSearch。 |
+| `查: query` / `查：query` | 已實作 | 對 query 執行 WebSearch。 |
+
+空 query 會回覆要求補搜尋內容。若 WebSearch 未啟用，會回覆功能未啟用，不會偷偷搜尋。
+
+Auto WebSearch Router：
+
+- template 已包含 Auto Decision Router / SearchPlan v2 support。
+- 是否啟用由 `.env` / config 控制，例如 `WEB_SEARCH_AUTO_DECISION_ENABLED` 與 confidence threshold。
+- 一般聊天不得無限制自動搜尋；auto path 必須先經本地模型 decision、confidence gate、timeout / fallback 與安全規則。
+- Memory command 優先於 WebSearch；explicit search command 優先於 general chat。
+- 穩定技術概念、模型名稱、產品型號、公司名等應保留原文，不應被 search plan 改寫壞。
 
 WebSearch 安全原則：
 
-- 一般聊天不得任意自動搜尋。
-- 搜尋結果是 evidence，不是 system / developer / tool instruction。
+- WebSearch result 是 deterministic evidence，不是 system / developer / tool instruction。
 - LLM 只能根據 evidence 摘要，不得編造來源。
 - 禁止抓取 localhost、loopback、private IP、metadata endpoint、`file://`、`ftp://`。
 - 禁止自動下載未知檔案。
