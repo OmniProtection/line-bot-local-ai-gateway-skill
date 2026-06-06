@@ -153,6 +153,7 @@ function createBotRuntime(deps = {}) {
   let webSearchQueue = Promise.resolve();
   const durableWorkerQueues = new Map();
   const durableRetryTimers = new Map();
+  const volatileReplyTokens = new Map();
 
   app.get("/health", (req, res) => {
     res.json({
@@ -278,6 +279,94 @@ function createBotRuntime(deps = {}) {
     return { ...result, queue };
   }
 
+  function parseStoredJson(value, fallback = null) {
+    if (!value) {
+      return fallback;
+    }
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+
+  function sourceFromLineEventLog(row) {
+    const source = { type: row?.source_type || "unknown" };
+    if (row?.sender_user_id) {
+      source.userId = row.sender_user_id;
+    }
+    if (row?.group_id) {
+      source.groupId = row.group_id;
+    }
+    if (row?.room_id) {
+      source.roomId = row.room_id;
+    }
+    return source;
+  }
+
+  function eventFromLineEventLog(row, replyToken = null) {
+    if (!row) {
+      return null;
+    }
+
+    const event = {
+      type: row.event_type || "unknown",
+      webhookEventId: row.webhook_event_id,
+      timestamp: Number(row.event_timestamp_ms) || Date.now(),
+      deliveryContext: {
+        isRedelivery: row.delivery_is_redelivery === 1
+      },
+      source: sourceFromLineEventLog(row)
+    };
+
+    if (replyToken) {
+      event.replyToken = replyToken;
+    }
+
+    if (row.event_type === "unsend") {
+      event.unsend = {
+        messageId: row.message_id || null
+      };
+      return event;
+    }
+
+    if (row.message_type) {
+      event.message = {
+        id: row.message_id || undefined,
+        type: row.message_type
+      };
+      if (row.message_type === "text") {
+        event.message.text = row.text || "";
+      }
+      const mention = parseStoredJson(row.mention_json, null);
+      if (mention) {
+        event.message.mention = mention;
+      }
+      if (row.quoted_message_id) {
+        event.message.quotedMessageId = row.quoted_message_id;
+      }
+    }
+
+    return event;
+  }
+
+  function consumeVolatileReplyToken(webhookEventId, { keep = false } = {}) {
+    if (!webhookEventId || !volatileReplyTokens.has(webhookEventId)) {
+      return null;
+    }
+    const replyToken = volatileReplyTokens.get(webhookEventId);
+    if (!keep) {
+      volatileReplyTokens.delete(webhookEventId);
+    }
+    return replyToken;
+  }
+
+  function forgetVolatileReplyToken(webhookEventId) {
+    if (webhookEventId) {
+      volatileReplyTokens.delete(webhookEventId);
+    }
+  }
+
   function durableQueueKey(jobTypes) {
     if (!Array.isArray(jobTypes) || jobTypes.length === 0) {
       return "__all__";
@@ -374,8 +463,27 @@ function createBotRuntime(deps = {}) {
     try {
       const payload = durableJob.payload || {};
       if (durableJob.jobType === "webhook_event") {
-        await handleEvent(payload.event, payload.requestId || durableJob.requestId, payload.index || 0, {
-          durableJob
+        const webhookEventId = payload.webhookEventId || durableJob.webhookEventId;
+        const lineEventLog = memoryStore.getLineEventLogByWebhookId
+          ? memoryStore.getLineEventLogByWebhookId(webhookEventId)
+          : null;
+        const replyToken = consumeVolatileReplyToken(webhookEventId, { keep: true });
+        const event = lineEventLog
+          ? eventFromLineEventLog(lineEventLog, replyToken)
+          : payload.event;
+        if (!event) {
+          throw new Error("missing_webhook_event_payload");
+        }
+        await handleEvent(event, payload.requestId || durableJob.requestId, payload.index || 0, {
+          durableJob,
+          lineEventLogSaveResult: lineEventLog
+            ? {
+                inserted: true,
+                duplicate: false,
+                id: lineEventLog.id,
+                persisted: true
+              }
+            : null
         });
       } else if (durableJob.jobType === "general_reply") {
         await runGeneralReplyJob(payload.job, durableJob);
@@ -390,6 +498,9 @@ function createBotRuntime(deps = {}) {
       }
 
       gatewayStore.completeJob(durableJob.id, { attemptId: durableJob.attemptId, completedAt: nowIso() });
+      if (durableJob.jobType === "webhook_event") {
+        forgetVolatileReplyToken(durableJob.webhookEventId || durableJob.payload?.webhookEventId);
+      }
       gatewayStore.recordPipelineLog({
         requestId: durableJob.requestId,
         jobId: durableJob.id,
@@ -416,6 +527,9 @@ function createBotRuntime(deps = {}) {
         createdAt: nowIso()
       });
       scheduleDurableRetry(failedJob);
+      if (durableJob.jobType === "webhook_event" && failedJob?.status === "failed") {
+        forgetVolatileReplyToken(durableJob.webhookEventId || durableJob.payload?.webhookEventId);
+      }
     }
   }
 
@@ -452,13 +566,57 @@ function createBotRuntime(deps = {}) {
 
   function enqueueWebhookEvent(event, requestId, index, options = {}) {
     const normalizedEvent = normalizeLineEvent(event, requestId, index);
+    const saveResult = memoryStore.saveLineEventLog(normalizedEvent);
+    if (saveResult.duplicate) {
+      log("line_event_duplicate_ignored", {
+        request_id: requestId,
+        webhook_event_id: normalizedEvent.webhookEventId,
+        event_index: index,
+        event_type: normalizedEvent.eventType,
+        message_type: normalizedEvent.messageType || "none",
+        source_type: normalizedEvent.sourceType
+      });
+      return {
+        inserted: false,
+        duplicate: true,
+        reason: "duplicate_webhook_event",
+        job: null,
+        queue: null
+      };
+    }
+    if (!saveResult.inserted) {
+      log("line_event_log_save_failed", {
+        request_id: requestId,
+        webhook_event_id: normalizedEvent.webhookEventId,
+        event_index: index,
+        event_type: normalizedEvent.eventType,
+        message_type: normalizedEvent.messageType || "none",
+        source_type: normalizedEvent.sourceType
+      });
+      return {
+        inserted: false,
+        duplicate: false,
+        reason: "line_event_log_save_failed",
+        job: null,
+        queue: null
+      };
+    }
+    if (event.replyToken) {
+      volatileReplyTokens.set(normalizedEvent.webhookEventId, event.replyToken);
+    }
     const result = enqueueDurableJob(
       "webhook_event",
       normalizedEvent.webhookEventId,
-      { event, requestId, index },
+      {
+        webhookEventId: normalizedEvent.webhookEventId,
+        lineEventLogId: saveResult.id,
+        requestId,
+        index
+      },
       {
         request_id: requestId,
         webhook_event_id: normalizedEvent.webhookEventId,
+        line_event_log_id: saveResult.id,
         event_index: index,
         source_type: normalizedEvent.sourceType
       },
@@ -1337,9 +1495,10 @@ function createBotRuntime(deps = {}) {
 
     log("webhook_event_received", context);
 
-    const normalizedEvent = normalizeLineEvent(event, requestId, index);
+    const normalizedEvent = options.normalizedEvent || normalizeLineEvent(event, requestId, index);
     context.webhook_event_id = normalizedEvent.webhookEventId;
-    const saveResult = memoryStore.saveLineEventLog(normalizedEvent);
+    const saveResult =
+      options.lineEventLogSaveResult || memoryStore.saveLineEventLog(normalizedEvent);
     const recordRoute = (route, responseMode, modelInput = null, status = "completed", fallbackReason = null) => {
       const pipelineRequest = buildRequestFor(
         normalizedEvent,

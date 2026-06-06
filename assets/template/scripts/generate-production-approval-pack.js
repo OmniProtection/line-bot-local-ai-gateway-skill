@@ -2,9 +2,8 @@ const fs = require("fs");
 const path = require("path");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const JARVIS_ROOT = path.resolve(PROJECT_ROOT, "..");
 const PRODUCTIONIZATION_ROOT = path.join(
-  JARVIS_ROOT,
+  PROJECT_ROOT,
   "docs",
   "maintenance",
   "GO-LINEBOT-PRODUCTIONIZATION-001"

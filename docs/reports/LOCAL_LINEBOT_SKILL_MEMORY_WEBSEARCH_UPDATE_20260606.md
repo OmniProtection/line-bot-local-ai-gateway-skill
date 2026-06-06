@@ -70,6 +70,23 @@ PASS_READY_TO_PUSH_BRANCH
 | `npm run test:web-search --prefix assets/template` | BLOCKED_PACKAGE_INSTALL_REQUIRED | Stopped at runtime test because template dependencies such as `express` are not installed. No package install was performed. |
 | `node assets/template/scripts/test-memory-relevance-gate.js` | BLOCKED_PACKAGE_INSTALL_REQUIRED | Requires `better-sqlite3`; no package install was performed. |
 
+## PR Review Fixes
+
+Codex PR review on PR #2 reported three P2 findings. They were addressed in a follow-up commit:
+
+| Finding | Resolution |
+| --- | --- |
+| Avoid persisting raw webhook events in durable payloads. | `webhook_event` durable jobs now persist only identifiers such as `webhookEventId` and `lineEventLogId`. Raw LINE events are not written into `jobs.payload_json`; reply tokens are kept only in process-local volatile memory. |
+| Preserve webhook replies when retrying after side effects. | Durable webhook retry now reloads the existing sanitized `line_event_log` record and passes the existing `lineEventLogId` back into `handleEvent`, so retry does not stop at the duplicate insert guard before reply side effects. |
+| Point evidence gates at the template docs directory. | Production evidence/readiness scripts now resolve productionization docs from `assets/template/docs/maintenance/...` through `PROJECT_ROOT/docs`, not the parent `assets/docs` path. |
+
+Additional validation after review fixes:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `node assets/template/scripts/test-memory-webhook-flow-static.js` | PASS | Covers sanitized webhook durable payload and retry reuse path. |
+| `node assets/template/scripts/production-evidence-secret-audit.js` | PASS | Scanned 8 template evidence records, no findings. |
+
 ## Release / GitHub Notes
 
 - This update is prepared on branch `codex/memory-websearch-update-20260606`.
