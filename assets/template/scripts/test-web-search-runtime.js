@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const { shouldUseDirectModelReply } = require("../src/directReplyGate");
 const {
+  askLocalModelForSearchDecision,
   askLocalModelWithSearchEvidence,
   askLocalModelWithWebSearchTools
 } = require("../src/lmStudioClient");
@@ -32,12 +33,16 @@ const BASE_CONFIG = {
   webSearchJobTimeoutMs: 1000,
   webSearchPageTimeoutMs: 200,
   webSearchPendingReplyText: "資料搜尋中，完成後會補上結果。",
+  webSearchReplyDeadlineMs: 59000,
+  webSearchDecisionTimeoutMs: 20000,
+  webSearchDecisionConfidenceThreshold: 0.65,
+  webSearchAutoDecisionEnabled: true,
   webSearchLmstudioToolsEnabled: false,
   webSearchLmstudioPluginId: "npacker/web-tools",
   webSearchDuckDuckGoFallbackEnabled: false,
   generalPendingReplyText: "思考中",
   generalDirectReplyEnabled: true,
-  generalDirectReplyMaxInputChars: 20,
+  generalDirectReplyMaxInputChars: 800,
   generalDirectModelTimeoutMs: 1300
 };
 
@@ -106,12 +111,14 @@ function createFakeMemoryStore() {
 function createRuntime(overrides = {}) {
   const calls = {
     modelInputs: [],
+    modelMemoryContexts: [],
     modelOptions: [],
     push: [],
     replies: [],
     searchQueries: [],
     searchOptions: [],
     searchEvidenceQueries: [],
+    searchDecisions: [],
     webSearchToolsQueries: []
   };
   const memoryStore = overrides.memoryStore || createFakeMemoryStore();
@@ -133,6 +140,7 @@ function createRuntime(overrides = {}) {
       overrides.askLocalModel ||
       (async (input, _config, _memoryContext, options) => {
         calls.modelInputs.push(input);
+        calls.modelMemoryContexts.push(_memoryContext);
         calls.modelOptions.push(options);
         return { text: "一般回覆", fallbackUsed: false, reason: "success" };
       }),
@@ -141,6 +149,21 @@ function createRuntime(overrides = {}) {
       (async (query, evidence, _config, options) => {
         calls.searchEvidenceQueries.push({ query, evidence, options });
         return { text: `搜尋整理: ${query}`, fallbackUsed: false, reason: "success" };
+      }),
+    askLocalModelForSearchDecision:
+      overrides.askLocalModelForSearchDecision ||
+      (async (input, _config, options) => {
+        calls.searchDecisions.push({ input, options });
+        return {
+          ok: true,
+          needsSearch: false,
+          confidence: 0.9,
+          searchQuery: "",
+          sourcePreference: "general",
+          reason: "normal_chat",
+          answerWithoutSearchAllowed: true,
+          durationMs: 1
+        };
       }),
     askLocalModelWithWebSearchTools:
       overrides.askLocalModelWithWebSearchTools ||
@@ -241,7 +264,7 @@ async function testDisabledFlags() {
   assert.equal(calls.searchQueries.length, 0);
 }
 
-async function testPushDisabled() {
+async function testPushDisabledDoesNotBlockReplySearch() {
   const { calls, runtime } = createRuntime({
     config: { webSearchEnabled: true, webSearchBackgroundPushEnabled: false }
   });
@@ -249,9 +272,9 @@ async function testPushDisabled() {
   await runtime.drainWebSearchQueue();
 
   assert.equal(calls.replies.length, 1);
-  assert.equal(calls.replies[0].text, "網路搜尋補送功能目前未啟用。");
+  assert.equal(calls.replies[0].text, "搜尋整理: 台積電");
   assert.equal(calls.push.length, 0);
-  assert.equal(calls.searchQueries.length, 0);
+  assert.deepEqual(calls.searchQueries, ["台積電"]);
 }
 
 async function testEmptyQuery() {
@@ -271,12 +294,274 @@ async function testNormalSearchFlow() {
 
   assert.deepEqual(
     calls.replies.map((item) => item.text),
-    ["資料搜尋中，完成後會補上結果。"]
+    ["搜尋整理: 台積電"]
   );
-  assert.deepEqual(calls.push, [{ to: "U123", text: "搜尋整理: 台積電" }]);
+  assert.deepEqual(calls.push, []);
   assert.deepEqual(calls.searchQueries, ["台積電"]);
   assert.equal(memoryStore.calls.shortTermSaves.length, 0);
   assert.equal(calls.searchEvidenceQueries[0].options.timeoutMs > 0, true);
+}
+
+async function testAutoSearchDecisionStartsReplyOnlySearch() {
+  const { calls, runtime } = createRuntime({
+    askLocalModelForSearchDecision: async (input, _config, options) => {
+      calls.searchDecisions.push({ input, options });
+      return {
+          ok: true,
+          needsSearch: true,
+          confidence: 0.92,
+          searchQuery: "台積電 今日 股價",
+          sourcePreference: "current_info",
+          reason: "requires_external_current_data",
+          answerWithoutSearchAllowed: false,
+          durationMs: 1
+      };
+    }
+  });
+
+  await runtime.handleEvent(createTextEvent("台積電今天股價是多少"), "req", 0);
+  await runtime.drainWebSearchQueue();
+
+  assert.deepEqual(calls.searchDecisions.map((item) => item.input), ["台積電今天股價是多少"]);
+  assert.deepEqual(calls.searchQueries, ["台積電 今日 股價"]);
+  assert.deepEqual(calls.searchOptions.map((item) => item.sourcePreference), ["current_info"]);
+  assert.deepEqual(calls.searchEvidenceQueries.map((item) => item.query), ["台積電 今日 股價"]);
+  assert.deepEqual(calls.searchEvidenceQueries.map((item) => item.options.originalQuestion), ["台積電今天股價是多少"]);
+  assert.deepEqual(calls.searchEvidenceQueries.map((item) => item.options.sourcePreference), ["current_info"]);
+  assert.deepEqual(calls.replies.map((item) => item.text), ["搜尋整理: 台積電 今日 股價"]);
+  assert.deepEqual(calls.push, []);
+  assert.deepEqual(calls.modelInputs, []);
+}
+
+async function testAutoSearchDecisionFalseUsesNormalChat() {
+  const { calls, runtime } = createRuntime();
+
+  await runtime.handleEvent(createTextEvent("你在幹嘛"), "req", 0);
+  await runtime.drainGeneralReplyQueue();
+
+  assert.deepEqual(calls.searchDecisions.map((item) => item.input), ["你在幹嘛"]);
+  assert.deepEqual(calls.searchQueries, []);
+  assert.deepEqual(calls.modelInputs, ["你在幹嘛"]);
+  assert.equal(calls.modelMemoryContexts[0].searchStatus.webSearchPerformed, false);
+  assert.deepEqual(calls.replies.map((item) => item.text), ["一般回覆"]);
+}
+
+async function testAutoSearchPlanNaturalQueriesUseWebSearch() {
+  const plans = new Map([
+    [
+      "搜尋5060ti規格",
+      {
+        searchQuery: "NVIDIA GeForce RTX 5060 Ti specifications",
+        sourcePreference: "product_specs"
+      }
+    ],
+    [
+      "5060ti 16g cuda",
+      {
+        searchQuery: "NVIDIA GeForce RTX 5060 Ti 16GB CUDA cores specifications",
+        sourcePreference: "product_specs"
+      }
+    ],
+    [
+      "搜尋官網5060ti的規格",
+      {
+        searchQuery: "NVIDIA official GeForce RTX 5060 Ti specifications",
+        sourcePreference: "official"
+      }
+    ],
+    [
+      "Nvidia官網",
+      {
+        searchQuery: "NVIDIA official website",
+        sourcePreference: "official"
+      }
+    ],
+    [
+      "基隆有哪些燒烤店",
+      {
+        searchQuery: "基隆 燒烤店",
+        sourcePreference: "local_places"
+      }
+    ]
+  ]);
+  const { calls, runtime } = createRuntime({
+    askLocalModelForSearchDecision: async (input, _config, options) => {
+      calls.searchDecisions.push({ input, options });
+      const plan = plans.get(input);
+      return {
+        ok: true,
+        needsSearch: true,
+        confidence: 0.9,
+        searchQuery: plan.searchQuery,
+        sourcePreference: plan.sourcePreference,
+        reason: "requires_source_grounded_answer",
+        answerWithoutSearchAllowed: false,
+        durationMs: 1
+      };
+    }
+  });
+
+  for (const input of plans.keys()) {
+    await runtime.handleEvent(createTextEvent(input), "req", 0);
+  }
+  await runtime.drainWebSearchQueue();
+
+  assert.deepEqual(calls.searchQueries, [...plans.values()].map((item) => item.searchQuery));
+  assert.deepEqual(calls.searchOptions.map((item) => item.sourcePreference), [...plans.values()].map((item) => item.sourcePreference));
+  assert.deepEqual(calls.modelInputs, []);
+  assert.deepEqual(calls.push, []);
+}
+
+async function testForcedSearchUsesPlanQueryWhenAvailable() {
+  const { calls, runtime } = createRuntime({
+    askLocalModelForSearchDecision: async (input, _config, options) => {
+      calls.searchDecisions.push({ input, options });
+      return {
+        ok: true,
+        needsSearch: true,
+        confidence: 0.9,
+        searchQuery: "NVIDIA official GeForce RTX 5060 Ti specifications",
+        sourcePreference: "official",
+        reason: "normalize_for_official_source",
+        answerWithoutSearchAllowed: false,
+        durationMs: 1
+      };
+    }
+  });
+
+  await runtime.handleEvent(createTextEvent("查：5060ti 官網"), "req", 0);
+
+  assert.deepEqual(calls.searchDecisions.map((item) => item.input), ["5060ti 官網"]);
+  assert.deepEqual(calls.searchQueries, ["NVIDIA official GeForce RTX 5060 Ti specifications"]);
+  assert.deepEqual(calls.searchOptions.map((item) => item.sourcePreference), ["official"]);
+  assert.deepEqual(calls.searchEvidenceQueries.map((item) => item.options.originalQuestion), ["5060ti 官網"]);
+}
+
+async function testForcedSearchFallsBackToRawQueryWhenPlanFails() {
+  const { calls, runtime } = createRuntime({
+    askLocalModelForSearchDecision: async (input, _config, options) => {
+      calls.searchDecisions.push({ input, options });
+      return {
+        ok: false,
+        needsSearch: false,
+        confidence: 0,
+        searchQuery: "",
+        sourcePreference: "general",
+        reason: "timeout",
+        answerWithoutSearchAllowed: true,
+        durationMs: 20000
+      };
+    }
+  });
+
+  await runtime.handleEvent(createTextEvent("搜：Nvidia官網"), "req", 0);
+
+  assert.deepEqual(calls.searchQueries, ["Nvidia官網"]);
+  assert.deepEqual(calls.searchOptions.map((item) => item.sourcePreference), ["general"]);
+}
+
+async function testSearchPlanFailureUsesNormalChatWithNoFakeSearchGuard() {
+  const { calls, runtime } = createRuntime({
+    askLocalModelForSearchDecision: async (input, _config, options) => {
+      calls.searchDecisions.push({ input, options });
+      return {
+        ok: false,
+        needsSearch: false,
+        confidence: 0,
+        searchQuery: "",
+        sourcePreference: "general",
+        reason: "timeout",
+        answerWithoutSearchAllowed: true,
+        durationMs: 20000
+      };
+    }
+  });
+
+  await runtime.handleEvent(createTextEvent("搜尋官網5060ti的規格"), "req", 0);
+
+  assert.deepEqual(calls.searchQueries, []);
+  assert.deepEqual(calls.modelInputs, ["搜尋官網5060ti的規格"]);
+  assert.equal(calls.modelMemoryContexts[0].searchStatus.webSearchPerformed, false);
+  assert.equal(calls.modelMemoryContexts[0].searchStatus.reason, "timeout");
+}
+
+async function testSearchDecisionClientParsesJson() {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              needs_search: true,
+              confidence: 0.91,
+              search_query: "台積電 今日 股價",
+              source_preference: "current_info",
+              reason: "requires external source-grounded data",
+              answer_without_search_allowed: false
+            })
+          },
+          finish_reason: "stop"
+        }
+      ]
+    })
+  });
+
+  try {
+    const result = await askLocalModelForSearchDecision(
+      "今天台積電股價是多少",
+      BASE_CONFIG,
+      { timeoutMs: 1000 }
+    );
+    assert.equal(result.ok, true);
+    assert.equal(result.needsSearch, true);
+    assert.equal(result.confidence, 0.91);
+    assert.equal(result.searchQuery, "台積電 今日 股價");
+    assert.equal(result.sourcePreference, "current_info");
+    assert.equal(result.answerWithoutSearchAllowed, false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+}
+
+async function testSearchDecisionClientAcceptsJsonReasonText() {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              needs_search: true,
+              confidence: 0.98,
+              search_query: "RTX 5060 Ti 規格",
+              source_preference: "product_specs",
+              reason:
+                "The user is asking for specific technical specifications of a product, which requires external product data.",
+              answer_without_search_allowed: false
+            })
+          },
+          finish_reason: "stop"
+        }
+      ]
+    })
+  });
+
+  try {
+    const result = await askLocalModelForSearchDecision("搜尋5060ti規格", BASE_CONFIG, {
+      timeoutMs: 1000
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.needsSearch, true);
+    assert.equal(result.searchQuery, "RTX 5060 Ti 規格");
+    assert.equal(result.sourcePreference, "product_specs");
+  } finally {
+    global.fetch = originalFetch;
+  }
 }
 
 async function testLmStudioToolsEnabledDoesNotBypassStableEvidenceSearch() {
@@ -296,8 +581,8 @@ async function testLmStudioToolsEnabledDoesNotBypassStableEvidenceSearch() {
   await runtime.handleEvent(createTextEvent("搜: OpenAI 最新消息"), "req", 0);
   await runtime.drainWebSearchQueue();
 
-  assert.deepEqual(calls.replies.map((item) => item.text), ["資料搜尋中，完成後會補上結果。"]);
-  assert.deepEqual(calls.push, [{ to: "U123", text: "搜尋整理: OpenAI 最新消息" }]);
+  assert.deepEqual(calls.replies.map((item) => item.text), ["搜尋整理: OpenAI 最新消息"]);
+  assert.deepEqual(calls.push, []);
   assert.deepEqual(calls.webSearchToolsQueries, []);
   assert.deepEqual(calls.searchQueries, ["OpenAI 最新消息"]);
   assert.deepEqual(calls.searchEvidenceQueries.map((item) => item.query), ["OpenAI 最新消息"]);
@@ -325,7 +610,8 @@ async function testLmStudioToolsFailureDoesNotBlockStableEvidenceSearch() {
 
   assert.deepEqual(calls.webSearchToolsQueries, []);
   assert.deepEqual(calls.searchQueries, ["美元兌台幣匯率"]);
-  assert.deepEqual(calls.push, [{ to: "U123", text: "搜尋整理: 美元兌台幣匯率" }]);
+  assert.deepEqual(calls.replies.map((item) => item.text), ["搜尋整理: 美元兌台幣匯率"]);
+  assert.deepEqual(calls.push, []);
 }
 
 async function testNoResults() {
@@ -335,13 +621,13 @@ async function testNoResults() {
   await runtime.handleEvent(createTextEvent("查: 沒資料"), "req", 0);
   await runtime.drainWebSearchQueue();
 
-  assert.equal(calls.replies[0].text, "資料搜尋中，完成後會補上結果。");
-  assert.deepEqual(calls.push, [{ to: "U123", text: "我沒有找到足夠可靠的搜尋結果。" }]);
+  assert.equal(calls.replies[0].text, "搜尋失敗");
+  assert.deepEqual(calls.push, []);
 }
 
 async function testTotalTimeoutAfterSearch() {
   const ctx = createRuntime({
-    config: { webSearchJobTimeoutMs: 50 },
+    config: { webSearchReplyDeadlineMs: 50 },
     searchWeb: async () => {
       ctx.setNow(2000);
       return {
@@ -356,12 +642,13 @@ async function testTotalTimeoutAfterSearch() {
   await ctx.runtime.drainWebSearchQueue();
 
   assert.equal(ctx.calls.searchEvidenceQueries.length, 0);
-  assert.deepEqual(ctx.calls.push, [{ to: "U123", text: "搜尋逾時，沒有取得足夠可靠資料。" }]);
+  assert.deepEqual(ctx.calls.replies.map((item) => item.text), ["搜尋失敗"]);
+  assert.deepEqual(ctx.calls.push, []);
 }
 
-async function testPushJobTimeoutIsSeparateFromSearchTimeout() {
+async function testReplyDeadlineIsSeparateFromSearchTimeout() {
   const ctx = createRuntime({
-    config: { webSearchTotalTimeoutMs: 50, webSearchJobTimeoutMs: 60000 },
+    config: { webSearchTotalTimeoutMs: 50, webSearchReplyDeadlineMs: 59000 },
     searchWeb: async (_query, _config, options) => {
       assert.equal(options.deadlineMs, 1050);
       ctx.setNow(2000);
@@ -379,10 +666,11 @@ async function testPushJobTimeoutIsSeparateFromSearchTimeout() {
 
   assert.equal(ctx.calls.searchEvidenceQueries.length, 1);
   assert.equal(ctx.calls.searchEvidenceQueries[0].options.timeoutMs > 50000, true);
-  assert.deepEqual(ctx.calls.push, [{ to: "U123", text: "搜尋整理: 長時間整理" }]);
+  assert.deepEqual(ctx.calls.replies.map((item) => item.text), ["搜尋整理: 長時間整理"]);
+  assert.deepEqual(ctx.calls.push, []);
 }
 
-async function testModelTimeoutKeepsEvidenceFallback() {
+async function testModelTimeoutRepliesSearchFailure() {
   const { calls, runtime } = createRuntime({
     askLocalModelWithSearchEvidence: async (_query, evidence, config) => ({
       text: [
@@ -400,9 +688,8 @@ async function testModelTimeoutKeepsEvidenceFallback() {
   await runtime.handleEvent(createTextEvent("查: 模型逾時"), "req", 0);
   await runtime.drainWebSearchQueue();
 
-  assert.equal(calls.push.length, 1);
-  assert.ok(calls.push[0].text.includes("資料已搜尋，但本機模型整理逾時。"));
-  assert.ok(calls.push[0].text.includes("https://example.com"));
+  assert.deepEqual(calls.replies.map((item) => item.text), ["搜尋失敗"]);
+  assert.deepEqual(calls.push, []);
 }
 
 async function testQueuedSearchEvidenceSkipsExpiredDeadline() {
@@ -901,7 +1188,7 @@ async function testLmStudioToolsClientKeepsClickableMarkdownSource() {
   }
 }
 
-async function testUnexpectedSearchErrorPushesFailure() {
+async function testUnexpectedSearchErrorRepliesFailure() {
   const { calls, runtime } = createRuntime({
     searchWeb: async () => {
       throw new Error("boom");
@@ -910,8 +1197,8 @@ async function testUnexpectedSearchErrorPushesFailure() {
   await runtime.handleEvent(createTextEvent("查: 例外"), "req", 0);
   await runtime.drainWebSearchQueue();
 
-  assert.equal(calls.push.length, 1);
-  assert.equal(calls.push[0].text, "我沒有找到足夠可靠的搜尋結果。");
+  assert.deepEqual(calls.replies.map((item) => item.text), ["搜尋失敗"]);
+  assert.deepEqual(calls.push, []);
 }
 
 function testDirectReplyGate() {
@@ -922,7 +1209,7 @@ function testDirectReplyGate() {
   assert.equal(shouldUseDirectModelReply("整理房間步驟", BASE_CONFIG), true);
   assert.equal(shouldUseDirectModelReply("詳細說明 xxx", BASE_CONFIG), true);
   assert.equal(
-    shouldUseDirectModelReply("這是一段明確超過二十個字的一般聊天測試內容", BASE_CONFIG),
+    shouldUseDirectModelReply("字".repeat(801), BASE_CONFIG),
     false
   );
   assert.equal(
@@ -1039,6 +1326,7 @@ async function testWebhookRespondsBeforeGeneralModelCompletion() {
   let releaseModel;
   const { calls, runtime } = createRuntime({
     createLineMiddleware: createJsonBodyMiddleware(),
+    config: { generalDirectReplyEnabled: false },
     askLocalModel: async (input) => {
       calls.modelInputs.push(input);
       await new Promise((resolve) => {
@@ -1099,7 +1387,7 @@ async function testGroupNoMentionDoesNotSearch() {
   assert.equal(calls.searchQueries.length, 0);
 }
 
-async function testPushTargetMissingDoesNotStartJob() {
+async function testSearchDoesNotRequirePushTarget() {
   const { calls, runtime } = createRuntime();
   await runtime.handleEvent(
     createTextEvent("@bot 查: 台積電", {
@@ -1115,11 +1403,9 @@ async function testPushTargetMissingDoesNotStartJob() {
   );
   await runtime.drainWebSearchQueue();
 
-  assert.deepEqual(calls.replies.map((item) => item.text), [
-    "目前無法在這個對話補送搜尋結果。"
-  ]);
+  assert.deepEqual(calls.replies.map((item) => item.text), ["搜尋整理: 台積電"]);
   assert.equal(calls.push.length, 0);
-  assert.equal(calls.searchQueries.length, 0);
+  assert.deepEqual(calls.searchQueries, ["台積電"]);
 }
 
 async function testBodyReadTimeout() {
@@ -1182,15 +1468,23 @@ async function testHugeSearchBodyIsBounded() {
 async function run() {
   testReplyLengthHardLimit();
   await testDisabledFlags();
-  await testPushDisabled();
+  await testPushDisabledDoesNotBlockReplySearch();
   await testEmptyQuery();
   await testNormalSearchFlow();
+  await testAutoSearchDecisionStartsReplyOnlySearch();
+  await testAutoSearchDecisionFalseUsesNormalChat();
+  await testAutoSearchPlanNaturalQueriesUseWebSearch();
+  await testForcedSearchUsesPlanQueryWhenAvailable();
+  await testForcedSearchFallsBackToRawQueryWhenPlanFails();
+  await testSearchPlanFailureUsesNormalChatWithNoFakeSearchGuard();
+  await testSearchDecisionClientParsesJson();
+  await testSearchDecisionClientAcceptsJsonReasonText();
   await testLmStudioToolsEnabledDoesNotBypassStableEvidenceSearch();
   await testLmStudioToolsFailureDoesNotBlockStableEvidenceSearch();
   await testNoResults();
   await testTotalTimeoutAfterSearch();
-  await testPushJobTimeoutIsSeparateFromSearchTimeout();
-  await testModelTimeoutKeepsEvidenceFallback();
+  await testReplyDeadlineIsSeparateFromSearchTimeout();
+  await testModelTimeoutRepliesSearchFailure();
   await testQueuedSearchEvidenceSkipsExpiredDeadline();
   await testSearchEvidenceAnswerWithoutUrlsFallsBackToSourceSummary();
   await testSearchEvidenceEnglishAnswerFallsBackToChineseSourceSummary();
@@ -1202,7 +1496,7 @@ async function run() {
   await testLmStudioToolsClientSendsRestIntegrationAndToken();
   await testLmStudioToolsClientClassifiesPluginPermissionDenied();
   await testLmStudioToolsClientKeepsClickableMarkdownSource();
-  await testUnexpectedSearchErrorPushesFailure();
+  await testUnexpectedSearchErrorRepliesFailure();
   testDirectReplyGate();
   await testNormalChatStillSavesMemory();
   await testDirectChatFallbackUsesAsyncAndSavesOnPush();
@@ -1211,7 +1505,7 @@ async function run() {
   await testWebhookRespondsBeforeGeneralModelCompletion();
   await testMemoryCommandKeepsPriority();
   await testGroupNoMentionDoesNotSearch();
-  await testPushTargetMissingDoesNotStartJob();
+  await testSearchDoesNotRequirePushTarget();
   await testBodyReadTimeout();
   await testHugeSearchBodyIsBounded();
 }

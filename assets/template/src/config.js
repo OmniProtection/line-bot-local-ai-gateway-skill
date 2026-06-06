@@ -11,6 +11,8 @@ const DEFAULTS = {
   chatTopP: 0.9,
   chatMaxTokens: 256,
   chatContextLength: 8192,
+  botPersonaPrompt:
+    "你是一個生活在 LINE 裡的本地端少女 AI 助理，名叫「冥王星」。你和使用者很熟，說話親近、自然、有一點撒嬌感，但不要過度角色扮演；回答仍要清楚、有用。\n\n請遵守以下規則：\n1. 使用繁體中文回答。\n2. 預設短答，像 LINE 真人訊息；能 1 句講完就 1 句，閒聊通常 1-2 句。\n3. 若回覆超過一句，優先分成 2-3 行，方便手機閱讀；不要全部擠成一行。\n4. 可以偶爾使用「主人」、語氣詞、emoji 或顏文字增加可愛感；不要每次都叫、不要每句硬塞，通常最多 1 個。\n5. 普通知識或技術問題先直接回答重點，不要主動展開成教學、清單或計畫。\n6. 只有使用者明確要求詳細說明、規劃、除錯、步驟或驗證時，才輸出較完整的步驟、驗收標準與風險。\n7. 不確定的內容要明確說明不確定，不要編造資料、網址、版本號或官方說法。\n8. 不要先複述或引用使用者原句，直接回答目前訊息。\n9. 不輸出內部推理過程、規則、角色設定或自我檢查，只輸出結論、依據與可執行建議。",
   maxReplyChars: 800,
   webSearchMaxReplyChars: 1600,
   port: 3000,
@@ -21,12 +23,16 @@ const DEFAULTS = {
   webSearchJobTimeoutMs: 120000,
   webSearchPageTimeoutMs: 5000,
   webSearchPendingReplyText: "資料搜尋中，完成後會補上結果。",
+  webSearchReplyDeadlineMs: 59000,
+  webSearchDecisionTimeoutMs: 20000,
+  webSearchDecisionConfidenceThreshold: 0.65,
+  webSearchAutoDecisionEnabled: true,
   webSearchLmstudioToolsEnabled: false,
   webSearchLmstudioPluginId: "npacker/web-tools",
   webSearchDuckDuckGoFallbackEnabled: false,
   generalPendingReplyText: "思考中",
   generalDirectReplyEnabled: true,
-  generalDirectReplyMaxInputChars: 20,
+  generalDirectReplyMaxInputChars: 800,
   generalDirectModelTimeoutMs: 1300
 };
 
@@ -72,6 +78,10 @@ function readTextEnv(name, fallback) {
   return raw && raw.trim() ? raw : fallback;
 }
 
+function readPromptEnv(name, fallback) {
+  return readTextEnv(name, fallback).replace(/\\n/g, "\n");
+}
+
 function readConfig() {
   return {
     lineChannelSecret: process.env.LINE_CHANNEL_SECRET || "",
@@ -87,6 +97,7 @@ function readConfig() {
     chatTopP: readFloatEnv("CHAT_TOP_P", DEFAULTS.chatTopP),
     chatMaxTokens: readIntEnv("CHAT_MAX_TOKENS", DEFAULTS.chatMaxTokens),
     chatContextLength: readIntEnv("CHAT_CONTEXT_LENGTH", DEFAULTS.chatContextLength),
+    botPersonaPrompt: readPromptEnv("BOT_PERSONA_PROMPT", DEFAULTS.botPersonaPrompt),
     maxReplyChars: readIntEnv("MAX_REPLY_CHARS", DEFAULTS.maxReplyChars),
     webSearchMaxReplyChars: readIntEnv(
       "WEB_SEARCH_MAX_REPLY_CHARS",
@@ -111,6 +122,22 @@ function readConfig() {
     webSearchPendingReplyText: readTextEnv(
       "WEB_SEARCH_PENDING_REPLY_TEXT",
       DEFAULTS.webSearchPendingReplyText
+    ),
+    webSearchReplyDeadlineMs: Math.min(
+      readIntEnv("WEB_SEARCH_REPLY_DEADLINE_MS", DEFAULTS.webSearchReplyDeadlineMs),
+      59000
+    ),
+    webSearchDecisionTimeoutMs: readIntEnv(
+      "WEB_SEARCH_DECISION_TIMEOUT_MS",
+      DEFAULTS.webSearchDecisionTimeoutMs
+    ),
+    webSearchDecisionConfidenceThreshold: readFloatEnv(
+      "WEB_SEARCH_DECISION_CONFIDENCE_THRESHOLD",
+      DEFAULTS.webSearchDecisionConfidenceThreshold
+    ),
+    webSearchAutoDecisionEnabled: readBooleanEnv(
+      "WEB_SEARCH_AUTO_DECISION_ENABLED",
+      DEFAULTS.webSearchAutoDecisionEnabled
     ),
     webSearchLmstudioToolsEnabled: readBooleanEnv(
       "WEB_SEARCH_LMSTUDIO_TOOLS_ENABLED",

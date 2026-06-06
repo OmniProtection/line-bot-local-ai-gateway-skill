@@ -24,12 +24,16 @@ const BASE_CONFIG = {
   webSearchJobTimeoutMs: 1000,
   webSearchPageTimeoutMs: 200,
   webSearchPendingReplyText: "資料搜尋中，完成後會補上結果。",
+  webSearchReplyDeadlineMs: 59000,
+  webSearchDecisionTimeoutMs: 20000,
+  webSearchDecisionConfidenceThreshold: 0.65,
+  webSearchAutoDecisionEnabled: true,
   webSearchLmstudioToolsEnabled: false,
   webSearchLmstudioPluginId: "npacker/web-tools",
   webSearchDuckDuckGoFallbackEnabled: false,
   generalPendingReplyText: "思考中",
   generalDirectReplyEnabled: true,
-  generalDirectReplyMaxInputChars: 20,
+  generalDirectReplyMaxInputChars: 800,
   generalDirectModelTimeoutMs: 1300
 };
 
@@ -41,6 +45,7 @@ function createFakeMemoryStore() {
     conversationSummarySaves: [],
     lineEvents: [],
     longTermSaves: [],
+    memoryContextLoads: [],
     shortTermSaves: []
   };
 
@@ -55,7 +60,15 @@ function createFakeMemoryStore() {
     },
     getPendingRollingSummaryBatch: () => [],
     listLongTermMemories: () => [],
-    loadRelevantMemoryContext: () => ({ evidence: [], recentConversation: [], rollingSummary: null }),
+    loadRelevantMemoryContext: (scope, query, options = {}) => {
+      calls.memoryContextLoads.push({ scope, query, options });
+      return {
+        evidence: [],
+        groupMentionContext: [],
+        recentConversation: [],
+        rollingSummary: null
+      };
+    },
     markLineEventsProcessedForMemory: () => {},
     markLineMessageUnsent: () => {},
     saveConversationSummary: (scope, summary, metadata) => {
@@ -88,6 +101,7 @@ function createRuntime(overrides = {}) {
     push: [],
     replies: [],
     rollingSummaries: [],
+    searchDecisions: [],
     searchEvidenceQueries: [],
     searchQueries: [],
     webSearchToolsQueries: []
@@ -116,6 +130,21 @@ function createRuntime(overrides = {}) {
       (async (query, evidence, _config, options) => {
         calls.searchEvidenceQueries.push({ query, evidence, options });
         return { fallbackUsed: false, reason: "success", text: `搜尋整理: ${query}` };
+      }),
+    askLocalModelForSearchDecision:
+      overrides.askLocalModelForSearchDecision ||
+      (async (input, _config, options) => {
+        calls.searchDecisions.push({ input, options });
+        return {
+          ok: true,
+          needsSearch: false,
+          confidence: 0.9,
+          searchQuery: "",
+          sourcePreference: "general",
+          reason: "normal_chat",
+          answerWithoutSearchAllowed: true,
+          durationMs: 1
+        };
       }),
     askLocalModelWithWebSearchTools:
       overrides.askLocalModelWithWebSearchTools ||
@@ -257,9 +286,9 @@ async function testPrivateSearchFlowDoesNotSaveMemory() {
   await runtime.handleEvent(textEvent("查: 台積電"), "req", 0);
   await drain(runtime);
 
-  assert.deepEqual(calls.replies.map((item) => item.text), ["資料搜尋中，完成後會補上結果。"]);
+  assert.deepEqual(calls.replies.map((item) => item.text), ["搜尋整理: 台積電"]);
   assert.deepEqual(calls.searchQueries, ["台積電"]);
-  assert.deepEqual(calls.push, [{ text: "搜尋整理: 台積電", to: "U123" }]);
+  assert.deepEqual(calls.push, []);
   assert.equal(memoryStore.calls.shortTermSaves.length, 0);
 }
 
@@ -284,7 +313,9 @@ async function testPrivateNaturalSearchPhraseIsNormalChat() {
 }
 
 async function testPrivateLongGeneralChatUsesPendingReplyAndPush() {
-  const { calls, memoryStore, runtime } = createRuntime();
+  const { calls, memoryStore, runtime } = createRuntime({
+    config: { generalDirectReplyEnabled: false }
+  });
   await runtime.handleEvent(textEvent("請詳細說明 LINE Bot 搜尋流程的一致規則"), "req", 0);
   await drain(runtime);
 
@@ -362,6 +393,33 @@ async function testGroupMentionEmptyText() {
   assert.equal(calls.generalModelInputs.length, 0);
 }
 
+async function testGroupMentionFollowUpKeepsInputAndLoadsSameGroupContext() {
+  const { calls, memoryStore, runtime } = createRuntime();
+  await runtime.handleEvent(
+    textEvent("@冥王星 明天早上吃什麼？", {
+      message: mentionMessage("明天早上吃什麼？"),
+      source: groupSource()
+    }),
+    "req",
+    0
+  );
+  await drain(runtime);
+
+  assert.deepEqual(calls.generalModelInputs, ["明天早上吃什麼？"]);
+  assert.equal(memoryStore.calls.memoryContextLoads.length, 1);
+  assert.equal(memoryStore.calls.memoryContextLoads[0].query, "明天早上吃什麼？");
+  assert.equal(
+    memoryStore.calls.memoryContextLoads[0].options.includeGroupMentionContext,
+    true,
+    "group mentions should load same-group context without special-casing the input text"
+  );
+  assert.equal(
+    memoryStore.calls.memoryContextLoads[0].scope.key,
+    "group:G123",
+    "group mention context should stay scoped to the current group"
+  );
+}
+
 async function testGroupMentionMemorySearchAndGeneralOrdering() {
   const memory = createRuntime();
   await memory.runtime.handleEvent(
@@ -387,14 +445,14 @@ async function testGroupMentionMemorySearchAndGeneralOrdering() {
     0
   );
   await drain(search.runtime);
-  assert.deepEqual(search.calls.replies.map((item) => item.text), [
-    "資料搜尋中，完成後會補上結果。"
-  ]);
+  assert.deepEqual(search.calls.replies.map((item) => item.text), ["搜尋整理: 台積電"]);
   assert.deepEqual(search.calls.searchQueries, ["台積電"]);
-  assert.deepEqual(search.calls.push, [{ text: "搜尋整理: 台積電", to: "G123" }]);
+  assert.deepEqual(search.calls.push, []);
   assert.equal(search.memoryStore.calls.shortTermSaves.length, 0);
 
-  const general = createRuntime();
+  const general = createRuntime({
+    config: { generalDirectReplyEnabled: false }
+  });
   await general.runtime.handleEvent(
     textEvent("@冥王星 請詳細說明 LINE Bot 搜尋流程的一致規則", {
       message: mentionMessage("請詳細說明 LINE Bot 搜尋流程的一致規則"),
@@ -411,7 +469,9 @@ async function testGroupMentionMemorySearchAndGeneralOrdering() {
 }
 
 async function testRoomMentionGeneralUsesRoomPushTarget() {
-  const { calls, runtime } = createRuntime();
+  const { calls, runtime } = createRuntime({
+    config: { generalDirectReplyEnabled: false }
+  });
   await runtime.handleEvent(
     textEvent("@冥王星 請詳細說明 room 搜尋與一般對話的一致規則", {
       message: mentionMessage("請詳細說明 room 搜尋與一般對話的一致規則"),
@@ -441,9 +501,8 @@ async function testSearchFlagFailuresAndToolFallbackRouting() {
   });
   await pushDisabled.runtime.handleEvent(textEvent("查: 台積電"), "req", 0);
   await drain(pushDisabled.runtime);
-  assert.deepEqual(pushDisabled.calls.replies.map((item) => item.text), [
-    "網路搜尋補送功能目前未啟用。"
-  ]);
+  assert.deepEqual(pushDisabled.calls.replies.map((item) => item.text), ["搜尋整理: 台積電"]);
+  assert.deepEqual(pushDisabled.calls.push, []);
 
   const toolsTimeout = createRuntime({
     askLocalModelWithWebSearchTools: async (query, _config, options) => {
@@ -456,9 +515,10 @@ async function testSearchFlagFailuresAndToolFallbackRouting() {
   await drain(toolsTimeout.runtime);
   assert.deepEqual(toolsTimeout.calls.webSearchToolsQueries, []);
   assert.deepEqual(toolsTimeout.calls.searchQueries, ["台積電今天股價"]);
-  assert.deepEqual(toolsTimeout.calls.push, [
-    { text: "搜尋整理: 台積電今天股價", to: "U123" }
+  assert.deepEqual(toolsTimeout.calls.replies.map((item) => item.text), [
+    "搜尋整理: 台積電今天股價"
   ]);
+  assert.deepEqual(toolsTimeout.calls.push, []);
 
   const toolsFallback = createRuntime({
     askLocalModelWithWebSearchTools: async (query, _config, options) => {
@@ -471,9 +531,10 @@ async function testSearchFlagFailuresAndToolFallbackRouting() {
   await drain(toolsFallback.runtime);
   assert.deepEqual(toolsFallback.calls.webSearchToolsQueries, []);
   assert.deepEqual(toolsFallback.calls.searchQueries, ["台積電今天股價"]);
-  assert.deepEqual(toolsFallback.calls.push, [
-    { text: "搜尋整理: 台積電今天股價", to: "U123" }
+  assert.deepEqual(toolsFallback.calls.replies.map((item) => item.text), [
+    "搜尋整理: 台積電今天股價"
   ]);
+  assert.deepEqual(toolsFallback.calls.push, []);
 }
 
 async function testSearchNoEvidenceAndGroundingFallbacks() {
@@ -482,9 +543,8 @@ async function testSearchNoEvidenceAndGroundingFallbacks() {
   });
   await noEvidence.runtime.handleEvent(textEvent("查: 不存在的資料"), "req", 0);
   await drain(noEvidence.runtime);
-  assert.deepEqual(noEvidence.calls.push, [
-    { text: "我沒有找到足夠可靠的搜尋結果。", to: "U123" }
-  ]);
+  assert.deepEqual(noEvidence.calls.replies.map((item) => item.text), ["搜尋失敗"]);
+  assert.deepEqual(noEvidence.calls.push, []);
 
   const grounding = createRuntime({
     askLocalModelWithSearchEvidence: async (query, evidence, _config, options) => {
@@ -498,8 +558,8 @@ async function testSearchNoEvidenceAndGroundingFallbacks() {
   });
   await grounding.runtime.handleEvent(textEvent("查: grounding 測試"), "req", 0);
   await drain(grounding.runtime);
-  assert.equal(grounding.calls.push.length, 1);
-  assert.ok(grounding.calls.push[0].text.includes("無法逐項驗證"));
+  assert.equal(grounding.calls.replies.length, 1);
+  assert.ok(grounding.calls.replies[0].text.includes("無法逐項驗證"));
   assert.equal(grounding.memoryStore.calls.shortTermSaves.length, 0);
 }
 
@@ -513,6 +573,7 @@ async function run() {
   await testRedeliveryDuplicateIsIgnored();
   await testGroupAndRoomNoMentionNeverStartOutboundWork();
   await testGroupMentionEmptyText();
+  await testGroupMentionFollowUpKeepsInputAndLoadsSameGroupContext();
   await testGroupMentionMemorySearchAndGeneralOrdering();
   await testRoomMentionGeneralUsesRoomPushTarget();
   await testSearchFlagFailuresAndToolFallbackRouting();
@@ -522,7 +583,7 @@ async function run() {
     JSON.stringify({
       status: "PASS",
       matrix: "line-routing",
-      scenarios: 22,
+      scenarios: 23,
       rule: "private-direct-group-room-require-self-mention"
     })
   );

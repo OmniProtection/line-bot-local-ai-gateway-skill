@@ -92,12 +92,23 @@ const routeStart = find("webhook route", 'app.post("/webhook"');
 const routeEnd = find("sendReply", "async function sendReply", routeStart);
 const routeSource = source.slice(routeStart, routeEnd);
 const responseEndIndex = routeSource.indexOf("res.status(200).end();");
-const enqueueIndex = routeSource.indexOf("enqueueWebhookEvent(event, requestId, index);");
+const enqueueIndex = routeSource.indexOf("enqueueWebhookEvent(event, requestId, index, { process: false });");
+const drainIndex = routeSource.indexOf('webhookEventQueue = drainDurableJobs(["webhook_event"]);');
 assert.notEqual(responseEndIndex, -1, "webhook route should send HTTP 2xx");
-assert.notEqual(enqueueIndex, -1, "webhook route should enqueue event processing");
+assert.notEqual(enqueueIndex, -1, "webhook route should enqueue durable event processing");
+assert.notEqual(drainIndex, -1, "webhook route should start durable worker after response");
 assert.ok(
-  responseEndIndex < enqueueIndex,
-  "webhook route should return HTTP 2xx before background event processing"
+  enqueueIndex < responseEndIndex,
+  "webhook route should write durable jobs before HTTP 2xx"
+);
+assert.ok(
+  responseEndIndex < drainIndex,
+  "webhook route should start background durable processing after HTTP 2xx"
+);
+assert.equal(
+  routeSource.includes("handleEvent(event"),
+  false,
+  "webhook route should not process events directly in the request path"
 );
 
 const generalJobStart = find("runGeneralReplyJob", "async function runGeneralReplyJob(");

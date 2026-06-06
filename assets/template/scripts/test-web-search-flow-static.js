@@ -49,13 +49,28 @@ function run() {
   assert.match(config, /generalDirectReplyEnabled: true/, "direct reply gate should be enabled by default");
   assert.match(
     config,
-    /generalDirectReplyMaxInputChars: 20/,
-    "direct reply gate should default to 20 input chars"
+    /generalDirectReplyMaxInputChars: 800/,
+    "direct reply gate should default to 800 input chars"
   );
   assert.match(
     config,
     /generalDirectModelTimeoutMs: 1300/,
     "direct reply model timeout should default to 1300ms"
+  );
+  assert.match(
+    config,
+    /webSearchReplyDeadlineMs: 59000/,
+    "Reply-only web search deadline should default to 59 seconds"
+  );
+  assert.match(
+    config,
+    /webSearchDecisionTimeoutMs: 20000/,
+    "auto web search decision should allow enough time for SearchPlan"
+  );
+  assert.match(
+    config,
+    /webSearchAutoDecisionEnabled: true/,
+    "auto web search decision should be available when web search is enabled"
   );
   assert.match(
     config,
@@ -85,7 +100,7 @@ function run() {
   );
   const generalJobIndex = server.indexOf("async function runGeneralReplyJob");
   const memoryContextIndex = server.indexOf(
-    "const memoryContext = memoryStore.loadRelevantMemoryContext(job.scope, job.modelInput, {"
+    "const memoryContext = withSearchStatus(memoryStore.loadRelevantMemoryContext(job.scope, job.modelInput, {"
   );
   const shortTermSaveIndex = server.indexOf(
     "memoryStore.saveShortTermExchange(job.scope, job.modelInput, reply);"
@@ -127,8 +142,8 @@ function run() {
   assert.equal(/broadcast|multicast|narrowcast/i.test(lineClient), false);
   assert.match(
     server,
-    /webSearchJobTimeoutMs/,
-    "web search job deadline should use the Push job timeout, not only the search fetch timeout"
+    /getReplySearchDeadlineMs/,
+    "web search replies should use a Reply API deadline"
   );
   assert.match(
     server,
@@ -193,7 +208,52 @@ function run() {
   assert.match(
     server,
     /getWebSearchReplyLimit/,
-    "web search Push replies should use the search-specific reply limit"
+    "web search Reply API answers should use the search-specific reply limit"
+  );
+  assert.match(
+    lmStudioClient,
+    /askLocalModelForSearchDecision/,
+    "auto search should have a model JSON decision entrypoint"
+  );
+  assert.match(
+    lmStudioClient,
+    /web_search_plan/,
+    "search plan should use a structured JSON schema"
+  );
+  assert.match(
+    lmStudioClient,
+    /search_query/,
+    "search plan should include a normalized search query"
+  );
+  assert.match(
+    lmStudioClient,
+    /source_preference/,
+    "search plan should include a source preference"
+  );
+  assert.match(
+    lmStudioClient,
+    /WEB_SEARCH_STATUS: No web search was performed for CURRENT_MESSAGE/,
+    "normal chat fallback should prevent fake search claims when no search ran"
+  );
+  assert.match(
+    lmStudioClient,
+    /ORIGINAL_QUESTION/,
+    "search answer prompt should include original question"
+  );
+  assert.match(
+    lmStudioClient,
+    /SEARCH_QUERY_USED/,
+    "search answer prompt should include actual search query"
+  );
+  assert.match(
+    lmStudioClient,
+    /SOURCE_PREFERENCE/,
+    "search answer prompt should include source preference"
+  );
+  assert.match(
+    server,
+    /recordSearchDecisionMetadata/,
+    "search decision metadata should be recorded without raw text"
   );
   assert.match(
     lmStudioClient,
@@ -213,13 +273,28 @@ function run() {
   );
   assert.match(
     lmStudioClient,
-    /你是 LINE AI 小幫手/,
-    "normal chat prompt should use the LINE short-chat role"
+    /回覆要符合 LINE 訊息閱讀習慣/,
+    "normal chat prompt should keep LINE short-chat guidance"
   );
   assert.match(
     lmStudioClient,
-    /一般回答盡量簡短/,
-    "normal chat prompt should prefer short LINE-style replies"
+    /answer 欄位放最後要傳給使用者的答案/,
+    "normal chat prompt should keep the JSON answer protocol"
+  );
+  assert.match(
+    lmStudioClient,
+    /LATEST_TURNS: latest same-chat turns before CURRENT_MESSAGE/,
+    "normal chat prompt should provide latest same-chat turns near the current message"
+  );
+  assert.match(
+    lmStudioClient,
+    /RETRIEVED_EVIDENCE: same-scope retrieved user messages/,
+    "normal chat prompt should keep retrieved evidence in its own memory layer"
+  );
+  assert.match(
+    lmStudioClient,
+    /formatSingleLineForMobile/,
+    "normal chat formatter should split long single-line replies for LINE reading"
   );
   assert.match(
     lmStudioClient,

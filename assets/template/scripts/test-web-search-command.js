@@ -101,16 +101,8 @@ function run() {
       parseWebSearchCommand("查: 台積電"),
       { webSearchEnabled: true, webSearchBackgroundPushEnabled: false },
       { type: "user", userId: "U123" }
-    ).reason,
-    "web_search_push_disabled"
-  );
-  assert.equal(
-    decideWebSearchRequest(
-      parseWebSearchCommand("查: 台積電"),
-      { webSearchEnabled: true, webSearchBackgroundPushEnabled: true },
-      { type: "group" }
-    ).reason,
-    "web_search_push_target_missing"
+    ).action,
+    "start"
   );
   assert.deepEqual(
     decideWebSearchRequest(
@@ -120,7 +112,6 @@ function run() {
     ),
     {
       action: "start",
-      pushTarget: "G123",
       query: "台積電"
     }
   );

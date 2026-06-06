@@ -21,10 +21,11 @@ const MEMORY_SELECTED_CONTEXT_CHAR_BUDGET = 5000;
 const MAX_RETRIEVAL_MANUAL_MEMORIES = 5;
 const MAX_RETRIEVAL_RECENT_GROUP_MESSAGES = 30;
 const MAX_RETRIEVAL_RECENT_GROUP_CHARS = 3000;
+const MAX_GROUP_MENTION_CONTEXT_MESSAGES = 8;
+const MAX_GROUP_MENTION_CONTEXT_CHARS = 1200;
 const MAX_RETRIEVAL_RAW_KEYWORD_RESULTS = 50;
 const MAX_RETRIEVAL_ORGANIZED_CANDIDATES = 30;
 const MAX_RETRIEVAL_ORGANIZED_SELECTED = 3;
-const MAX_RETRIEVAL_RECENT_INTERACTIONS = 5;
 const MAX_RECENT_CONVERSATION_MESSAGES = 40;
 const MAX_RECENT_CONVERSATION_CHARS = 8000;
 const MAX_RAW_EVENT_JSON_CHARS = 8000;
@@ -37,8 +38,7 @@ const RELEVANCE_THRESHOLDS = {
   raw_text: 0.36,
   raw_group: 0.36,
   organized: 0.36,
-  rolling_summary: 0.3,
-  recent_interaction: 0.32
+  rolling_summary: 0.3
 };
 
 const LOW_INFORMATION_TERMS = new Set([
@@ -188,10 +188,6 @@ function sourceWeight(source) {
     return 0.04;
   }
 
-  if (source === "recent_interaction") {
-    return 0.03;
-  }
-
   return 0.02;
 }
 
@@ -244,9 +240,7 @@ function makeCandidate(source, row, recencyRank, contentField = "content") {
     source === "raw_text" ||
     source === "raw_group"
       ? "auto"
-      : source === "recent_interaction"
-        ? "short"
-        : source;
+      : source;
 
   return {
     id: row.id,
@@ -1147,6 +1141,42 @@ function createMemoryStore(dbPath = DEFAULT_DB_PATH, options = {}) {
     return selected;
   }
 
+  function selectGroupMentionContext(scope, excludeLineEventLogId = -1) {
+    if (!isGroupScope(scope)) {
+      return [];
+    }
+
+    let usedChars = 0;
+    const rows = selectRecentLineEvents.all({
+      conversation_key: scope.key,
+      exclude_id: normalizeExcludeLineEventLogId(excludeLineEventLogId),
+      limit: MAX_GROUP_MENTION_CONTEXT_MESSAGES
+    });
+    const selected = [];
+
+    for (const row of rows) {
+      const content = sanitizeMemoryText(row.content);
+      if (!content) {
+        continue;
+      }
+
+      if (usedChars + content.length > MAX_GROUP_MENTION_CONTEXT_CHARS) {
+        continue;
+      }
+
+      selected.push({
+        source: "group_mention_context",
+        role: "user",
+        content,
+        sourceLineEventLogId: row.id,
+        eventTimestampMs: row.event_timestamp_ms
+      });
+      usedChars += content.length;
+    }
+
+    return selected.reverse();
+  }
+
   function selectKeywordLineEventCandidates(scope, features, excludeLineEventLogId = -1) {
     if (!scope || features.terms.length === 0) {
       return [];
@@ -1226,16 +1256,6 @@ function createMemoryStore(dbPath = DEFAULT_DB_PATH, options = {}) {
     return selectManualLongTerm
       .all(scope.key, MAX_RETRIEVAL_MANUAL_MEMORIES)
       .map((row, index) => makeCandidate("manual", row, index));
-  }
-
-  function selectRecentInteractionCandidates(scope) {
-    if (!scope) {
-      return [];
-    }
-
-    return selectRecent
-      .all(scope.key, MAX_RETRIEVAL_RECENT_INTERACTIONS)
-      .map((row, index) => makeCandidate("recent_interaction", row, index));
   }
 
   function selectRecentConversation(scope) {
@@ -1700,8 +1720,12 @@ function createMemoryStore(dbPath = DEFAULT_DB_PATH, options = {}) {
     const excludeLineEventLogId = normalizeExcludeLineEventLogId(options.excludeLineEventLogId);
     const emptyContext = {
       recentConversation: [],
+      manualMemories: [],
+      summaries: [],
+      retrievedEvidence: [],
       rollingSummary: null,
       evidence: [],
+      groupMentionContext: [],
       stats: {
         memory_candidates_count: 0,
         memory_selected_count: 0,
@@ -1712,6 +1736,8 @@ function createMemoryStore(dbPath = DEFAULT_DB_PATH, options = {}) {
         recent_group_selected_count: 0,
         long_term_selected_count: 0,
         recent_interaction_selected_count: 0,
+        group_mention_context_count: 0,
+        group_mention_context_chars: 0,
         recent_conversation_count: 0,
         rolling_summary_chars: 0,
         context_chars: 0,
@@ -1731,12 +1757,13 @@ function createMemoryStore(dbPath = DEFAULT_DB_PATH, options = {}) {
 
     const features = extractQueryFeatures(queryText);
     const recentConversation = selectRecentConversation(scope);
+    const groupMentionContext = options.includeGroupMentionContext
+      ? selectGroupMentionContext(scope, excludeLineEventLogId)
+      : [];
     const rollingSummary = getConversationSummary(scope);
-    const candidates = [
-      ...selectManualMemoryCandidates(scope),
-      ...selectRollingSummaryCandidate(scope),
-      ...selectRecentInteractionCandidates(scope)
-    ];
+    const manualCandidates = selectManualMemoryCandidates(scope);
+    const rawEvidenceCandidates = [];
+    const summaryCandidates = [];
 
     if (scope) {
       logEvent("memory_retrieval_source", {
@@ -1744,47 +1771,75 @@ function createMemoryStore(dbPath = DEFAULT_DB_PATH, options = {}) {
         scope_type: scope.type
       });
 
-      candidates.push(
+      rawEvidenceCandidates.push(
         ...selectRecentTextWindow(scope, excludeLineEventLogId),
         ...selectKeywordLineEventCandidates(scope, features, excludeLineEventLogId)
       );
 
       if (isGroupScope(scope)) {
-        candidates.push(...selectOrganizedMemoryCandidates(scope));
+        summaryCandidates.push(...selectOrganizedMemoryCandidates(scope));
       }
     }
 
-    const evidencePack = buildRelevantEvidence(candidates, features);
-    const selected = evidencePack.selected;
+    const manualPack = buildRelevantEvidence(manualCandidates, features);
+    const rawEvidencePack = buildRelevantEvidence(rawEvidenceCandidates, features);
+    const organizedSummaryPack = buildRelevantEvidence(summaryCandidates, features);
+    const manualMemories = manualPack.selected;
+    const retrievedEvidence = rawEvidencePack.selected;
+    const summaries = [
+      ...(rollingSummary
+        ? [
+            {
+              source: "rolling_summary",
+              role: "summary",
+              content: rollingSummary.summary,
+              sourceMessageCount: rollingSummary.sourceMessageCount,
+              updatedAt: rollingSummary.updatedAt
+            }
+          ]
+        : []),
+      ...organizedSummaryPack.selected
+    ];
+    const selected = [...manualMemories, ...retrievedEvidence];
+    const usedChars =
+      manualPack.usedChars +
+      rawEvidencePack.usedChars +
+      summaries.reduce((total, item) => total + String(item.content || "").length, 0) +
+      groupMentionContext.reduce((total, item) => total + String(item.content || "").length, 0);
+    const topScore = Math.max(
+      manualPack.topScore,
+      rawEvidencePack.topScore,
+      organizedSummaryPack.topScore
+    );
     const stats = {
-      memory_candidates_count: candidates.length,
+      memory_candidates_count:
+        manualCandidates.length + rawEvidenceCandidates.length + summaryCandidates.length,
       memory_selected_count: selected.length,
-      manual_memory_selected_count: selected.filter((item) => item.source === "manual").length,
-      rolling_summary_selected_count: selected.filter((item) => item.source === "rolling_summary")
+      manual_memory_selected_count: manualMemories.length,
+      rolling_summary_selected_count: summaries.filter((item) => item.source === "rolling_summary")
         .length,
-      recent_text_selected_count: selected.filter(
+      recent_text_selected_count: retrievedEvidence.filter(
         (item) => item.source === "recent_text" || item.source === "raw_text"
       ).length,
-      inbound_text_selected_count: selected.filter(
+      inbound_text_selected_count: retrievedEvidence.filter(
         (item) => item.source === "recent_text" || item.source === "raw_text"
       ).length,
       recent_group_selected_count: isGroupScope(scope)
-        ? selected.filter((item) => item.source === "recent_text" || item.source === "recent_group")
-            .length
+        ? retrievedEvidence.filter(
+            (item) => item.source === "recent_text" || item.source === "recent_group"
+          ).length
         : 0,
-      long_term_selected_count: selected.filter((item) =>
-        item.source === "raw_text" ||
-        item.source === "raw_group" ||
-        item.source === "organized" ||
-        item.source === "rolling_summary"
-      ).length,
-      recent_interaction_selected_count: selected.filter(
-        (item) => item.source === "recent_interaction"
-      ).length,
+      long_term_selected_count: summaries.length,
+      recent_interaction_selected_count: 0,
+      group_mention_context_count: groupMentionContext.length,
+      group_mention_context_chars: groupMentionContext.reduce(
+        (total, item) => total + String(item.content || "").length,
+        0
+      ),
       recent_conversation_count: recentConversation.length,
       rolling_summary_chars: rollingSummary?.summary ? rollingSummary.summary.length : 0,
-      context_chars: evidencePack.usedChars,
-      top_relevance_score: Number(evidencePack.topScore.toFixed(3)),
+      context_chars: usedChars,
+      top_relevance_score: Number(topScore.toFixed(3)),
       retrieval_duration_ms: Date.now() - startedAt,
       organized_summary_direct_injection: false
     };
@@ -1796,6 +1851,10 @@ function createMemoryStore(dbPath = DEFAULT_DB_PATH, options = {}) {
 
     return {
       recentConversation,
+      manualMemories,
+      summaries,
+      retrievedEvidence,
+      groupMentionContext,
       rollingSummary,
       evidence: selected,
       stats

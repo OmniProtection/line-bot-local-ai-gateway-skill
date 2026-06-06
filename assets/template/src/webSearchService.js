@@ -52,16 +52,16 @@ function normalizeSearchQueryForEngine(query) {
   return clampText(String(query || "").replace(/[，,。？?！!：:；;]/g, " ").trim(), MAX_QUERY_CHARS);
 }
 
-function isRelevantCandidate(candidate, query) {
-  return isPolicyCandidateAllowed(candidate, analyzeWebSearchQuery(query));
+function isRelevantCandidate(candidate, query, options = {}) {
+  return isPolicyCandidateAllowed(candidate, analyzeWebSearchQuery(query, options));
 }
 
 function classifySearchSource(result) {
   return classifyPolicySource(result);
 }
 
-function rankSearchCandidates(candidates, query = "") {
-  const queryPolicy = analyzeWebSearchQuery(query);
+function rankSearchCandidates(candidates, query = "", options = {}) {
+  const queryPolicy = analyzeWebSearchQuery(query, options);
   return [...candidates]
     .map((candidate) => rankCandidate(candidate, queryPolicy))
     .sort((a, b) => {
@@ -616,9 +616,10 @@ async function searchWeb(query, config, options = {}) {
       return { ok: false, reason: "no_results", evidence: [], durationMs: Date.now() - startedAt };
     }
 
-    const rankedCandidates = rankSearchCandidates(candidates, safeQuery);
+    const sourcePreference = options.sourcePreference || "general";
+    const rankedCandidates = rankSearchCandidates(candidates, safeQuery, { sourcePreference });
     const relevantCandidates = rankedCandidates.filter((candidate) =>
-      isRelevantCandidate(candidate, safeQuery)
+      isRelevantCandidate(candidate, safeQuery, { sourcePreference })
     );
     if (relevantCandidates.length === 0) {
       logEvent("web_search_no_relevant_candidates", {
@@ -636,6 +637,7 @@ async function searchWeb(query, config, options = {}) {
       candidate_count: candidates.length,
       relevant_count: relevantCandidates.length,
       selected_count: results.length,
+      source_preference: sourcePreference,
       selected_source_types: results.map((item) => item.sourceType).slice(0, 5)
     });
 

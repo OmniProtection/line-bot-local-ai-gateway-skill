@@ -117,7 +117,75 @@ function addTag(tags, reasons, tag, reason) {
   reasons.add(reason || tag);
 }
 
-function analyzeWebSearchQuery(query) {
+function normalizeSourcePreference(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["official", "local_places", "product_specs", "current_info", "general"].includes(normalized)) {
+    return normalized;
+  }
+  return "general";
+}
+
+function applySourcePreference(queryPolicy, sourcePreference) {
+  const preference = normalizeSourcePreference(sourcePreference);
+  const policy = {
+    ...(queryPolicy || {}),
+    intentTags: [...(queryPolicy?.intentTags || [])],
+    evidenceRequirements: [...(queryPolicy?.evidenceRequirements || [])],
+    claimRestrictions: [...(queryPolicy?.claimRestrictions || [])],
+    reasons: [...(queryPolicy?.reasons || [])],
+    sourcePreference: preference
+  };
+
+  const addPolicyTag = (tag, requirement, restriction, reason) => {
+    if (tag && !policy.intentTags.includes(tag)) {
+      policy.intentTags.push(tag);
+    }
+    if (requirement && !policy.evidenceRequirements.includes(requirement)) {
+      policy.evidenceRequirements.push(requirement);
+    }
+    if (restriction && !policy.claimRestrictions.includes(restriction)) {
+      policy.claimRestrictions.push(restriction);
+    }
+    if (reason && !policy.reasons.includes(reason)) {
+      policy.reasons.push(reason);
+    }
+  };
+
+  if (preference === "official") {
+    addPolicyTag(
+      "primary_source_preferred",
+      "primary_or_authoritative_source",
+      null,
+      "source_preference_official"
+    );
+  } else if (preference === "local_places") {
+    addPolicyTag(
+      "local_place_structured",
+      "structured_place_evidence",
+      "no_local_precision_without_structured_evidence",
+      "source_preference_local_places"
+    );
+    policy.answerModeHint = "conservative_if_unstructured";
+  } else if (preference === "product_specs") {
+    addPolicyTag(
+      "purchase_decision",
+      "product_or_platform_evidence",
+      "numbers_must_be_grounded",
+      "source_preference_product_specs"
+    );
+  } else if (preference === "current_info") {
+    addPolicyTag(
+      "freshness_required",
+      "fresh_or_dated_evidence",
+      "no_stale_background_as_current",
+      "source_preference_current_info"
+    );
+  }
+
+  return policy;
+}
+
+function analyzeWebSearchQuery(query, options = {}) {
   const text = String(query || "").trim();
   const lower = text.toLowerCase();
   const intentTags = new Set();
@@ -180,14 +248,14 @@ function analyzeWebSearchQuery(query) {
     answerModeHint = "per_item_evidence_required";
   }
 
-  return {
+  return applySourcePreference({
     query: text,
     intentTags: [...intentTags],
     evidenceRequirements: [...evidenceRequirements],
     claimRestrictions: [...claimRestrictions],
     answerModeHint,
     reasons: [...reasons]
-  };
+  }, options.sourcePreference);
 }
 
 function hasIntent(queryPolicy, tag) {
@@ -347,6 +415,8 @@ function rankCandidate(candidate, queryPolicy) {
   const searchRank = Number.isFinite(candidate.searchRank) ? candidate.searchRank : 999;
   const reasons = [...classification.reasons];
   let policyPenalty = 0;
+  let preferenceBoost = 0;
+  const sourcePreference = normalizeSourcePreference(queryPolicy?.sourcePreference);
 
   if (
     hasIntent(queryPolicy, "freshness_required") &&
@@ -378,9 +448,45 @@ function rankCandidate(candidate, queryPolicy) {
     reasons.push("local_place_missing_place_signal");
   }
 
+  if (sourcePreference === "official") {
+    if (classification.sourceType === "official_primary") {
+      preferenceBoost += 45;
+      reasons.push("source_preference_official_boost");
+    } else if (classification.sourceType === "structured_platform") {
+      preferenceBoost += 8;
+    } else {
+      policyPenalty += classification.sourceType === "general_web" ? 25 : 45;
+      reasons.push("source_preference_official_penalty");
+    }
+  } else if (sourcePreference === "product_specs") {
+    if (["official_primary", "structured_platform"].includes(classification.sourceType)) {
+      preferenceBoost += 25;
+      reasons.push("source_preference_product_specs_boost");
+    } else if (["weak_secondary", "low_quality_or_seo"].includes(classification.sourceType)) {
+      policyPenalty += 35;
+      reasons.push("source_preference_product_specs_penalty");
+    }
+  } else if (sourcePreference === "local_places") {
+    if (classification.sourceType === "structured_platform" && hasLocalPlaceSignal(candidate)) {
+      preferenceBoost += 35;
+      reasons.push("source_preference_local_places_boost");
+    } else if (!hasLocalPlaceSignal(candidate)) {
+      policyPenalty += 35;
+      reasons.push("source_preference_local_places_penalty");
+    }
+  } else if (sourcePreference === "current_info") {
+    if (classification.sourceType === "official_primary" || hasFreshnessSignal(candidate)) {
+      preferenceBoost += 20;
+      reasons.push("source_preference_current_info_boost");
+    } else if (hasEvergreenBackgroundSignal(candidate)) {
+      policyPenalty += 25;
+      reasons.push("source_preference_current_info_penalty");
+    }
+  }
+
   const qualityScore = Math.max(
     0,
-    classification.baseScore + relevance.relevanceScore - searchRank * 1.5 - policyPenalty
+    classification.baseScore + preferenceBoost + relevance.relevanceScore - searchRank * 1.5 - policyPenalty
   );
 
   return {
@@ -676,6 +782,7 @@ function validateAnswerAgainstPolicy(text, evidence, queryPolicy, maxReplyChars)
 }
 
 module.exports = {
+  applySourcePreference,
   analyzeWebSearchQuery,
   classifySource,
   computeQueryRelevance,

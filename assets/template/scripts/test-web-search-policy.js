@@ -31,6 +31,10 @@ function run() {
   assert.equal(hasTag(product, "purchase_decision"), true);
   assert.equal(hasTag(product, "recommendation_or_comparison"), true);
   assert.equal(hasTag(analyzeWebSearchQuery("5060TI"), "purchase_decision"), true);
+  const productByPreference = analyzeWebSearchQuery("graphics card model", {
+    sourcePreference: "product_specs"
+  });
+  assert.equal(hasTag(productByPreference, "purchase_decision"), true);
 
   const local = analyzeWebSearchQuery("忠孝東路大安路口附近韓式烤肉餐廳");
   assert.equal(hasTag(local, "local_place_structured"), true);
@@ -94,6 +98,30 @@ function run() {
   assert.equal(isCandidateAllowed(wikiRanked, freshnessPolicy), false);
   assert.ok(officialRanked.qualityScore > wikiRanked.qualityScore);
 
+  const officialPreferencePolicy = analyzeWebSearchQuery("graphics card specifications", {
+    sourcePreference: "official"
+  });
+  const officialPreferenceRanked = rankCandidate(
+    {
+      title: "Official product specifications",
+      url: "https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5060-ti/",
+      snippet: "Specifications and features",
+      searchRank: 2
+    },
+    officialPreferencePolicy
+  );
+  const marketplacePreferenceRanked = rankCandidate(
+    {
+      title: "Rtx 5060ti 16gb",
+      url: "https://www.amazon.com/rtx-5060ti-16gb/s?k=rtx+5060ti+16gb",
+      snippet: "Shopping results",
+      searchRank: 1
+    },
+    officialPreferencePolicy
+  );
+  assert.ok(officialPreferenceRanked.qualityScore > marketplacePreferenceRanked.qualityScore);
+  assert.ok(officialPreferenceRanked.qualityReasons.includes("source_preference_official_boost"));
+
   const schoolCandidate = rankCandidate(
     {
       title: "臺中市西區忠孝國民小學服務網",
@@ -119,6 +147,29 @@ function run() {
   );
   assert.equal(localDecision.answerMode, "conservative_summary");
   assert.equal(localDecision.shouldCallModel, false);
+
+  const localPreferencePolicy = analyzeWebSearchQuery("基隆 燒烤", {
+    sourcePreference: "local_places"
+  });
+  const localPlatformRanked = rankCandidate(
+    {
+      title: "基隆燒烤餐廳菜單",
+      url: "https://www.openrice.com/zh/taiwan/restaurants?what=基隆燒烤",
+      snippet: "餐廳 地址 菜單 訂位",
+      searchRank: 2
+    },
+    localPreferencePolicy
+  );
+  const localBlogRanked = rankCandidate(
+    {
+      title: "基隆必吃 10 家",
+      url: "https://example-blog.com/keelung-food",
+      snippet: "旅遊美食推薦",
+      searchRank: 1
+    },
+    localPreferencePolicy
+  );
+  assert.ok(localPlatformRanked.qualityScore > localBlogRanked.qualityScore);
 
   const productPolicy = analyzeWebSearchQuery("5060TI 價格 規格");
   const productDecision = evaluateEvidence(
