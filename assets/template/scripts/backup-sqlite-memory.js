@@ -4,8 +4,9 @@ const path = require("path");
 const Database = require("better-sqlite3");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
+const JARVIS_ROOT = path.resolve(PROJECT_ROOT, "..");
 const SOURCE_DB = path.join(PROJECT_ROOT, "data", "linebot-memory.sqlite");
-const BACKUP_ROOT = path.join(PROJECT_ROOT, "backups", "linebot-memory");
+const BACKUP_ROOT = path.join(JARVIS_ROOT, "backups", "linebot-memory");
 
 function hasFlag(name) {
   return process.argv.includes(name);
@@ -25,10 +26,10 @@ function sha256File(filePath) {
   });
 }
 
-function assertInsideProject(filePath) {
+function assertInsideJarvis(filePath) {
   const resolved = path.resolve(filePath);
-  if (!resolved.toLowerCase().startsWith(PROJECT_ROOT.toLowerCase() + path.sep.toLowerCase())) {
-    throw new Error(`Refusing to write outside project root: ${resolved}`);
+  if (!resolved.toLowerCase().startsWith(JARVIS_ROOT.toLowerCase() + path.sep.toLowerCase())) {
+    throw new Error(`Refusing to write outside JARVIS root: ${resolved}`);
   }
 }
 
@@ -74,7 +75,7 @@ async function buildManifest(mode, backupDbPath = null) {
 }
 
 function executeBackup(backupDbPath) {
-  assertInsideProject(backupDbPath);
+  assertInsideJarvis(backupDbPath);
   fs.mkdirSync(path.dirname(backupDbPath), { recursive: true });
   const db = new Database(SOURCE_DB, { readonly: true, fileMustExist: true });
   try {

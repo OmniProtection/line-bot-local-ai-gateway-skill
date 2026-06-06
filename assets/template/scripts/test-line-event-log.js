@@ -553,7 +553,7 @@ function run() {
   store.markLineMessageUnsent("message-exact-keep-middle");
   const exactListContext = store.loadRelevantMemoryContext(groupScope, "精確清單保留測試 summary");
   assert.equal(
-    exactListContext.evidence.some((item) => item.content.includes("不應被 dirty")),
+    exactListContext.summaries.some((item) => item.content.includes("不應被 dirty")),
     true,
     "range fallback should not dirty summaries that have exact source ids excluding the unsent event"
   );

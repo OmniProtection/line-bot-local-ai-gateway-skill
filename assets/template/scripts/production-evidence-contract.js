@@ -2,9 +2,11 @@ const fs = require("fs");
 const path = require("path");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const PRODUCTIONIZATION_ROOT = path.resolve(
-  process.env.PRODUCTIONIZATION_ROOT ||
-    path.join(PROJECT_ROOT, "docs", "maintenance", "GO-LINEBOT-PRODUCTIONIZATION-001")
+const PRODUCTIONIZATION_ROOT = path.join(
+  PROJECT_ROOT,
+  "docs",
+  "maintenance",
+  "GO-LINEBOT-PRODUCTIONIZATION-001"
 );
 const EVIDENCE_ROOT = path.join(PRODUCTIONIZATION_ROOT, "evidence-records");
 
@@ -241,7 +243,6 @@ function evidenceStatus() {
 
 module.exports = {
   EVIDENCE_ROOT,
-  PROJECT_ROOT,
   PRODUCTIONIZATION_ROOT,
   REQUIRED_EVIDENCE,
   evidencePath,

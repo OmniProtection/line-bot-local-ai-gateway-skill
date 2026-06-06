@@ -29,13 +29,13 @@ function assertBeforeInHandle(beforeLabel, beforeNeedle, afterLabel, afterNeedle
 
 assertBeforeInHandle(
   "normalizeLineEvent",
-  "const normalizedEvent = normalizeLineEvent(event, requestId, index);",
+  "const normalizedEvent = options.normalizedEvent || normalizeLineEvent(event, requestId, index);",
   "saveLineEventLog",
-  "const saveResult = memoryStore.saveLineEventLog(normalizedEvent);"
+  "options.lineEventLogSaveResult || memoryStore.saveLineEventLog(normalizedEvent);"
 );
 assertBeforeInHandle(
   "saveLineEventLog",
-  "const saveResult = memoryStore.saveLineEventLog(normalizedEvent);",
+  "options.lineEventLogSaveResult || memoryStore.saveLineEventLog(normalizedEvent);",
   "duplicate guard",
   "if (saveResult.duplicate) {"
 );
@@ -89,15 +89,65 @@ assertBeforeInHandle(
 );
 
 const routeStart = find("webhook route", 'app.post("/webhook"');
-const routeEnd = find("sendReply", "async function sendReply", routeStart);
+const routeEnd = find("recordPipeline", "function recordPipeline", routeStart);
 const routeSource = source.slice(routeStart, routeEnd);
 const responseEndIndex = routeSource.indexOf("res.status(200).end();");
-const enqueueIndex = routeSource.indexOf("enqueueWebhookEvent(event, requestId, index);");
+const enqueueIndex = routeSource.indexOf("enqueueWebhookEvent(event, requestId, index, { process: false });");
+const drainIndex = routeSource.indexOf('webhookEventQueue = drainDurableJobs(["webhook_event"]);');
 assert.notEqual(responseEndIndex, -1, "webhook route should send HTTP 2xx");
-assert.notEqual(enqueueIndex, -1, "webhook route should enqueue event processing");
+assert.notEqual(enqueueIndex, -1, "webhook route should enqueue durable event processing");
+assert.notEqual(drainIndex, -1, "webhook route should start durable worker after response");
 assert.ok(
-  responseEndIndex < enqueueIndex,
-  "webhook route should return HTTP 2xx before background event processing"
+  enqueueIndex < responseEndIndex,
+  "webhook route should write durable jobs before HTTP 2xx"
+);
+assert.ok(
+  responseEndIndex < drainIndex,
+  "webhook route should start background durable processing after HTTP 2xx"
+);
+assert.equal(
+  routeSource.includes("handleEvent(event"),
+  false,
+  "webhook route should not process events directly in the request path"
+);
+
+const enqueueWebhookStart = find("enqueueWebhookEvent", "function enqueueWebhookEvent(");
+const enqueueWebhookEnd = find("handleMemoryCommand", "async function handleMemoryCommand", enqueueWebhookStart);
+const enqueueWebhookSource = source.slice(enqueueWebhookStart, enqueueWebhookEnd);
+assert.ok(
+  enqueueWebhookSource.includes("memoryStore.saveLineEventLog(normalizedEvent)"),
+  "webhook enqueue should persist the sanitized line event log before durable processing"
+);
+assert.ok(
+  enqueueWebhookSource.includes("if (saveResult.duplicate && !saveResult.id)") &&
+    enqueueWebhookSource.includes('log("line_event_duplicate_requeued"'),
+  "webhook enqueue should requeue duplicate line-event logs when an existing log id is available"
+);
+assert.ok(
+  enqueueWebhookSource.includes("volatileReplyTokens.set(normalizedEvent.webhookEventId, event.replyToken);"),
+  "webhook enqueue should keep replyToken in volatile memory instead of durable payload"
+);
+assert.ok(
+  enqueueWebhookSource.includes("webhookEventId: normalizedEvent.webhookEventId") &&
+    enqueueWebhookSource.includes("lineEventLogId: saveResult.id"),
+  "webhook durable payload should store identifiers needed to reload sanitized event data"
+);
+assert.equal(
+  enqueueWebhookSource.includes("{ event, requestId, index }"),
+  false,
+  "webhook durable payload should not persist the raw LINE event"
+);
+
+const durableWebhookStart = find("durable webhook branch", 'if (durableJob.jobType === "webhook_event") {');
+const durableWebhookEnd = find("general reply branch", '} else if (durableJob.jobType === "general_reply") {', durableWebhookStart);
+const durableWebhookSource = source.slice(durableWebhookStart, durableWebhookEnd);
+assert.ok(
+  durableWebhookSource.includes("memoryStore.getLineEventLogByWebhookId"),
+  "durable webhook retry should reload sanitized line event log by webhook id"
+);
+assert.ok(
+  durableWebhookSource.includes("lineEventLogSaveResult"),
+  "durable webhook retry should reuse the existing line event log id instead of re-inserting"
 );
 
 const generalJobStart = find("runGeneralReplyJob", "async function runGeneralReplyJob(");

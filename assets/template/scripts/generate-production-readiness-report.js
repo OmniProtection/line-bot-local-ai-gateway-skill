@@ -1,13 +1,15 @@
 const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
-const {
-  PRODUCTIONIZATION_ROOT,
-  evidenceStatus,
-  scanEvidenceSecrets
-} = require("./production-evidence-contract");
+const { evidenceStatus, scanEvidenceSecrets } = require("./production-evidence-contract");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
+const PRODUCTIONIZATION_ROOT = path.join(
+  PROJECT_ROOT,
+  "docs",
+  "maintenance",
+  "GO-LINEBOT-PRODUCTIONIZATION-001"
+);
 const TASK_BACKLOG = path.join(PRODUCTIONIZATION_ROOT, "task-backlog.md");
 const APPROVAL_MATRIX = path.join(PRODUCTIONIZATION_ROOT, "approval-matrix.md");
 const APPROVAL_EXECUTION_PLAN = path.join(PRODUCTIONIZATION_ROOT, "approval-execution-plan.md");
@@ -15,19 +17,6 @@ const GO_LIVE_GATE = path.join(PRODUCTIONIZATION_ROOT, "go-live-gate.md");
 const REPORT_PATH = path.join(PRODUCTIONIZATION_ROOT, "readiness-report.md");
 
 function readTaskBacklog() {
-  if (!fs.existsSync(TASK_BACKLOG)) {
-    return [
-      {
-        id: "LINEBOT-P0-DOCS",
-        phase: "0",
-        task: "Productionization docs pack is missing.",
-        status: "BLOCKED",
-        acceptance: "Template docs exist under docs/maintenance/GO-LINEBOT-PRODUCTIONIZATION-001.",
-        evidence: "task-backlog.md"
-      }
-    ];
-  }
-
   const markdown = fs.readFileSync(TASK_BACKLOG, "utf8");
   const tasks = [];
   for (const line of markdown.split(/\r?\n/)) {

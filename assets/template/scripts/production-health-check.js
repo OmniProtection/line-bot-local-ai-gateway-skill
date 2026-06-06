@@ -2,7 +2,7 @@ const { readConfig } = require("../src/config");
 const fs = require("fs");
 const path = require("path");
 
-const DEFAULT_PUBLIC_HEALTH_URL = "";
+const DEFAULT_PUBLIC_HEALTH_URL = "https://example.invalid/health";
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_MAX_LOG_BYTES = 1024 * 1024;
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -197,15 +197,6 @@ async function checkPublicHealth(timeoutMs) {
     "--public-health-url",
     process.env.PUBLIC_HEALTH_URL || DEFAULT_PUBLIC_HEALTH_URL
   );
-  if (!url) {
-    return {
-      status: "BLOCKED",
-      mode: "skipped",
-      reason:
-        "PUBLIC_HEALTH_URL or --public-health-url is required before checking a public endpoint."
-    };
-  }
-
   const result = await fetchJson(url, { timeoutMs });
   if (result.ok && result.body?.ok === true) {
     return passCheck({

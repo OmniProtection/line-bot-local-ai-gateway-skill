@@ -1,9 +1,15 @@
 const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
-const { PRODUCTIONIZATION_ROOT, scanEvidenceSecrets } = require("./production-evidence-contract");
+const { scanEvidenceSecrets } = require("./production-evidence-contract");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
+const PRODUCTIONIZATION_ROOT = path.join(
+  PROJECT_ROOT,
+  "docs",
+  "maintenance",
+  "GO-LINEBOT-PRODUCTIONIZATION-001"
+);
 const TASK_BACKLOG = path.join(PRODUCTIONIZATION_ROOT, "task-backlog.md");
 
 function execNodeScript(script, args = []) {
@@ -35,11 +41,11 @@ function parseTaskBacklog() {
   if (!fs.existsSync(TASK_BACKLOG)) {
     return [
       {
-        id: "LINEBOT-P0-DOCS",
-        task: "Productionization docs pack is missing.",
+        id: "LINEBOT-RUNTIME-EVIDENCE",
+        task: "Real runtime, public webhook, LINE smoke, backup/restore, monitoring, and go-live approval evidence are not recorded in this fresh template.",
         status: "BLOCKED",
-        acceptance_criteria: "Template docs exist under docs/maintenance/GO-LINEBOT-PRODUCTIONIZATION-001.",
-        evidence_required: "task-backlog.md"
+        acceptance_criteria: "Operator runs approved live checks in a private environment and records sanitized evidence.",
+        evidence_required: "runtime/live evidence"
       }
     ];
   }

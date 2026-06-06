@@ -77,6 +77,11 @@ function run() {
 
   const generalQuestion = store.loadRelevantMemoryContext(groupScope, "什麼是 webhook？");
   assertNoEvidence(generalQuestion, "general question");
+  assert.equal(
+    generalQuestion.summaries.length,
+    0,
+    "unrelated organized group summary should not enter summary context"
+  );
 
   for (let index = 0; index < 10; index += 1) {
     saveGroupLineEvent(
@@ -109,6 +114,10 @@ function run() {
     manualRelevant.stats.manual_memory_selected_count > 0,
     "related manual memory should be selected"
   );
+  assert.ok(
+    manualRelevant.manualMemories.some((item) => item.content.includes("繁體中文")),
+    "manual memories should be returned in the dedicated manualMemories layer"
+  );
 
   const privateQuestion = store.loadRelevantMemoryContext(userScope, "剛剛大家在聊什麼？");
   assertNoEvidence(privateQuestion, "private scope should not read group memory");
@@ -130,8 +139,8 @@ function run() {
     "private inbound text should be retrievable as same-scope conversation memory"
   );
   assert.ok(
-    privateInboundContext.evidence.some((item) => item.content.includes("私聊記憶修復")),
-    "private inbound evidence should include the prior private message"
+    privateInboundContext.retrievedEvidence.some((item) => item.content.includes("私聊記憶修復")),
+    "private inbound evidence should include the prior private message in retrievedEvidence"
   );
 
   const currentOnlyContext = store.loadRelevantMemoryContext(
@@ -149,7 +158,7 @@ function run() {
     }
   );
   assert.equal(
-    currentOnlyContext.evidence.some((item) => item.content.includes("當前訊息排除測試")),
+    currentOnlyContext.retrievedEvidence.some((item) => item.content.includes("當前訊息排除測試")),
     false,
     "current inbound event should not be selected as its own memory context"
   );
@@ -177,9 +186,53 @@ function run() {
     "私聊記憶修復是什麼？"
   );
   assert.equal(
-    groupShouldNotReadPrivate.evidence.some((item) => item.content.includes("私聊記憶修復")),
+    groupShouldNotReadPrivate.retrievedEvidence.some((item) => item.content.includes("私聊記憶修復")),
     false,
     "group scope should not read private inbound text"
+  );
+
+  const breakfastQuestion = saveLineEvent(
+    store,
+    groupScope,
+    "group",
+    "group-breakfast-question",
+    "明天早上吃漢堡",
+    1700000003000
+  );
+  const groupMentionCurrent = saveLineEvent(
+    store,
+    groupScope,
+    "group",
+    "group-current-mention",
+    "@冥王星 明天早上吃什麼？",
+    1700000003001
+  );
+  const groupMentionContext = store.loadRelevantMemoryContext(groupScope, "明天早上吃什麼？", {
+    excludeLineEventLogId: groupMentionCurrent.id,
+    includeGroupMentionContext: true
+  });
+  assert.ok(breakfastQuestion.id, "group no-mention question should be saved");
+  assert.equal(
+    groupMentionContext.groupMentionContext.some((item) => item.content.includes("明天早上吃漢堡")),
+    true,
+    "group mention context should include prior same-group no-mention messages for follow-up questions"
+  );
+  assert.equal(
+    groupMentionContext.groupMentionContext.some((item) =>
+      item.content.includes("@冥王星 明天早上吃什麼？")
+    ),
+    false,
+    "group mention context should exclude the current mention event"
+  );
+  assert.equal(
+    groupMentionContext.groupMentionContext.some((item) => item.content.includes("私聊記憶修復")),
+    false,
+    "group mention context should not include private-scope line events"
+  );
+  assert.equal(
+    groupMentionContext.stats.group_mention_context_count > 0,
+    true,
+    "group mention context should be counted separately from relevance-selected evidence"
   );
 
   store.saveShortTermExchange(
@@ -197,6 +250,16 @@ function run() {
     followUpQuestion.recentConversation.map((item) => item.content),
     ["我頭痛", "頭痛可能和疲勞、壓力、睡眠或其他原因有關。"],
     "recent conversation should preserve the prior exchange even without keyword overlap"
+  );
+  assert.equal(
+    followUpQuestion.retrievedEvidence.some((item) => item.source === "recent_interaction"),
+    false,
+    "short-term chat history should stay in recentConversation and not duplicate into evidence"
+  );
+  assert.equal(
+    followUpQuestion.retrievedEvidence.some((item) => item.role === "assistant"),
+    false,
+    "old assistant replies should not enter retrievedEvidence"
   );
 
   store.saveShortTermExchange(userScope, "我不舒服", "請問是哪裡不舒服？");
@@ -273,6 +336,10 @@ function run() {
     "rolling summary should be returned as a dedicated memory layer"
   );
   assert.ok(
+    rollingContext.summaries.some((item) => item.source === "rolling_summary" && item.content.includes("腳麻")),
+    "rolling summary should also be returned in the summaries layer"
+  );
+  assert.ok(
     rollingContext.stats.rolling_summary_chars > 0,
     "rolling summary stats should be visible"
   );
@@ -286,8 +353,11 @@ function run() {
       private_inbound_selected_count: privateInboundContext.stats.inbound_text_selected_count,
       room_inbound_selected_count: roomContext.stats.inbound_text_selected_count,
       manual_memory_selected_count: manualRelevant.stats.manual_memory_selected_count,
+      manual_memories_count: manualRelevant.manualMemories.length,
       recent_conversation_count: followUpQuestion.stats.recent_conversation_count,
       long_recent_conversation_count: longFollowUpQuestion.stats.recent_conversation_count,
+      retrieved_evidence_count: privateInboundContext.retrievedEvidence.length,
+      summary_count: rollingContext.summaries.length,
       rolling_summary_chars: rollingContext.stats.rolling_summary_chars,
       fixed_context_package_rolling_summary_chars: unrelatedRollingContext.stats.rolling_summary_chars
     })

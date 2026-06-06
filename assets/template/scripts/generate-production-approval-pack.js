@@ -1,8 +1,13 @@
 const fs = require("fs");
 const path = require("path");
-const { PRODUCTIONIZATION_ROOT } = require("./production-evidence-contract");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
+const PRODUCTIONIZATION_ROOT = path.join(
+  PROJECT_ROOT,
+  "docs",
+  "maintenance",
+  "GO-LINEBOT-PRODUCTIONIZATION-001"
+);
 const OUTPUT_PATH = path.join(PRODUCTIONIZATION_ROOT, "approval-execution-plan.md");
 
 const STEPS = [
@@ -13,7 +18,7 @@ const STEPS = [
     precheck: "npm run prod:task:runtime:dry-run",
     execute: "node scripts/register-production-scheduled-task.js --task=runtime --execute",
     evidence: "evidence-records/gate-a-runtime-task.json",
-    pass: "Scheduled task exists, command points to local-free-line-bot, retry policy is present, local health returns PASS."
+    pass: "Scheduled task exists, command points to the local project server, retry policy is present, local health returns PASS."
   },
   {
     gate: "B",

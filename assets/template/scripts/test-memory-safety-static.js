@@ -12,7 +12,9 @@ function extractFunction(source, name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name} should exist`);
 
-  const bodyStart = source.indexOf("{", start);
+  const signatureEnd = source.indexOf(")", start);
+  assert.notEqual(signatureEnd, -1, `${name} signature should end`);
+  const bodyStart = source.indexOf("{", signatureEnd);
   assert.notEqual(bodyStart, -1, `${name} body should start`);
 
   let depth = 0;
@@ -53,6 +55,7 @@ const memoryStore = read("src/memoryStore.js");
 const server = read("src/server.js");
 const lineClient = read("src/lineClient.js");
 const lmStudioClient = read("src/lmStudioClient.js");
+const pipelineContract = read("src/pipelineContract.js");
 const webSearchCommand = read("src/webSearchCommand.js");
 
 assertIncludes("memoryStore", memoryStore, "CREATE TABLE IF NOT EXISTS line_event_log");
@@ -77,15 +80,16 @@ for (const redactedKey of [
   assertIncludes("raw event redaction keys", memoryStore, redactedKey);
 }
 
-const redactRawEvent = extractFunction(server, "redactRawEvent");
+const redactRawEvent = extractFunction(pipelineContract, "redactRawEvent");
 assertIncludes("server raw event redaction", redactRawEvent, "hasText");
 assertIncludes("server raw event redaction", redactRawEvent, "hasMention");
 assertExcludes("server raw event redaction", redactRawEvent, "replyToken");
 assertExcludes("server raw event redaction", redactRawEvent, "text:");
 assertExcludes("server raw event redaction", redactRawEvent, "rawEvent");
 
-const normalizeLineEvent = extractFunction(server, "normalizeLineEvent");
+const normalizeLineEvent = extractFunction(pipelineContract, "normalizeLineEvent");
 assertIncludes("normalized event raw storage", normalizeLineEvent, "rawEventJson: safeJson(redactRawEvent(event))");
+assertIncludes("server uses pipeline contract", server, "normalizePipelineLineEvent(event, requestId, index)");
 
 const saveLongTermMemory = extractFunction(memoryStore, "saveLongTermMemory");
 assertIncludes("manual long-term memory write", saveLongTermMemory, 'source: "manual"');
@@ -131,11 +135,22 @@ assertIncludes(
 const selectOrganizedGroupMemories = extractConstSql(memoryStore, "selectOrganizedGroupMemories");
 assertIncludes("organized summary retrieval", selectOrganizedGroupMemories, "is_dirty = 0");
 assertIncludes("organized summaries candidate-only", memoryStore, "organized_summary_direct_injection: false");
+assertIncludes("layered memory context", memoryStore, "manualMemories");
+assertIncludes("layered memory context", memoryStore, "summaries");
+assertIncludes("layered memory context", memoryStore, "retrievedEvidence");
 assertIncludes("generic inbound selected stat", memoryStore, "recent_text_selected_count");
 assertExcludes("rolling summary should not use heuristic gate", memoryStore, "shouldIncludeRollingSummaryLayer");
 assertExcludes("do not add context hint expansion", memoryStore, '"要看"');
 assertExcludes("do not add context hint expansion", memoryStore, '"這個"');
 assertIncludes("fixed same-scope context package", memoryStore, "rollingSummary,");
+assertIncludes("prompt memory sections", lmStudioClient, "LATEST_TURNS: latest same-chat turns");
+assertIncludes("prompt memory sections", lmStudioClient, "GROUP_RECENT_CONTEXT: prior same-group");
+assertIncludes("group follow-up context", lmStudioClient, "answer directly from this context");
+assertIncludes("group mention truth", lmStudioClient, "prior messages without a bot mention are context only");
+assertIncludes("assistant style isolation", lmStudioClient, "do not copy or imitate their wording");
+assertIncludes("prompt memory sections", lmStudioClient, "MANUAL_MEMORY: durable user-saved memories");
+assertIncludes("prompt memory sections", lmStudioClient, "SUMMARY_CONTEXT: compressed older same-scope");
+assertIncludes("prompt memory sections", lmStudioClient, "RETRIEVED_EVIDENCE: same-scope retrieved user messages");
 
 const markLineMessageUnsent = extractFunction(memoryStore, "markLineMessageUnsent");
 assertIncludes("unsend handling", markLineMessageUnsent, "markLineMessageUnsentByMessageId.run");
@@ -147,10 +162,16 @@ for (const forbidden of ["broadcast", "multicast", "narrowcast"]) {
 }
 assertIncludes("controlled Push API wrapper", lineClient, "function pushText");
 assertIncludes("controlled Push API wrapper", lineClient, "pushMessage");
-assertIncludes("web search Push API gate", webSearchCommand, "webSearchBackgroundPushEnabled");
+assertExcludes("web search command should not require Push gate", webSearchCommand, "webSearchBackgroundPushEnabled");
 assertIncludes("web search Push API gate", server, "decideWebSearchRequest(searchCommand, config, event.source)");
 assertIncludes("web search Push API gate", server, "handleWebSearchCommand");
-assertIncludes("web search Push API use", server, "sendPush(job.pushTarget");
+const replyWebSearchStart = server.indexOf("async function runReplyWebSearch");
+const legacyWebSearchStart = server.indexOf("async function runWebSearchJob");
+assert.notEqual(replyWebSearchStart, -1, "reply-only web search should exist");
+assert.notEqual(legacyWebSearchStart, -1, "legacy durable web search function should exist");
+const replyWebSearch = server.slice(replyWebSearchStart, legacyWebSearchStart);
+assertIncludes("web search Reply API use", replyWebSearch, "sendReply");
+assertExcludes("reply-only web search must not use Push", replyWebSearch, "sendPush");
 assertIncludes("general reply Push API handoff", server, "async function handleGeneralConversation");
 assertIncludes("general reply Push API handoff", server, "config.generalPendingReplyText");
 assertIncludes("general reply Push API handoff", server, "enqueueGeneralReplyJob");

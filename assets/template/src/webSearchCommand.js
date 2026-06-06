@@ -44,14 +44,6 @@ function decideWebSearchRequest(searchCommand, config, source) {
     };
   }
 
-  if (!config?.webSearchBackgroundPushEnabled) {
-    return {
-      action: "reply",
-      reason: "web_search_push_disabled",
-      text: "網路搜尋補送功能目前未啟用。"
-    };
-  }
-
   if (!searchCommand.query) {
     const command = searchCommand.command || "查";
     return {
@@ -61,18 +53,8 @@ function decideWebSearchRequest(searchCommand, config, source) {
     };
   }
 
-  const pushTarget = getPushTarget(source);
-  if (!pushTarget) {
-    return {
-      action: "reply",
-      reason: "web_search_push_target_missing",
-      text: "目前無法在這個對話補送搜尋結果。"
-    };
-  }
-
   return {
     action: "start",
-    pushTarget,
     query: searchCommand.query
   };
 }
