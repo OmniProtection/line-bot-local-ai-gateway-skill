@@ -4,84 +4,121 @@ Codex Skill + starter template for creating local-first LINE Bot AI gateways wit
 
 本地優先 LINE Bot AI Gateway 的 Codex Skill + Starter Template。
 
-The public display name is `LINE Bot Local AI Gateway Skill`.
+`LINE Bot Local AI Gateway Skill` 是本專案的公開 Display Name。
 
-The Chinese display name is `LINE Bot 本地 AI Gateway Skill`.
+中文正式名稱：`LINE Bot 本地 AI Gateway Skill`。
 
 The current repository slug is `line-bot-local-ai-gateway-skill`.
 
 The current GitHub repository is `OmniProtection/line-bot-local-ai-gateway-skill`.
 
-`local-free-line-bot-creator` was the previous repository slug, legacy project identifier, and compatibility alias. It is not the current repository slug or the public display name.
+`local-free-line-bot-creator` was the previous repository slug, legacy project identifier, historical identifier, and compatibility alias. It is not the current repository slug or the public display name.
 
-`LINE Bot Local AI Gateway Skill` is a non-official LINE Bot AI Gateway Skill for developers who want a local-first LINE webhook server template with a local LLM, SQLite memory, explicit web-search commands, and pre-public safety checks.
+本專案是 **non-official** 的 LINE Bot AI Gateway 開發者工具。This project is not affiliated with, authorized by, sponsored by, or endorsed by LINE Corporation, LY Corporation, or any LINE official product team. It is not official and not an official LINE Bot builder.
 
-This project is not affiliated with, authorized by, sponsored by, or endorsed by LINE Corporation, LY Corporation, or any LINE official product team. It is not an official LINE Bot builder and does not replace LINE Developers Console.
+## 這是什麼
 
-## What This Is
+這是一個給開發者使用的 Codex Skill + starter template，用來建立或審查本地優先的 LINE Bot AI Gateway。
 
-- A Codex Skill for creating and reviewing local-first LINE Bot projects.
-- A starter template under `assets/template`.
-- A safety-focused developer alpha kit for local webhook, LM Studio, SQLite memory, and explicit web search.
-- A set of zero-secret verifier scripts and non-live CI checks.
+它聚焦在：
 
-## What This Is Not
+- 本地 LINE webhook server template。
+- LINE signature verification path。
+- LM Studio / OpenAI-compatible local LLM。
+- SQLite memory。
+- 明確指令觸發的 WebSearch。
+- public hygiene / template verifier / non-live CI。
+- GitHub alpha release 前的安全邊界。
 
-This project does not:
+目前 template 已同步 2026-06-06 的 Memory / WebSearch 更新：
 
-- Create a LINE Official Account.
-- Log in to LINE Developers Console.
-- Retrieve LINE Channel Secret or Channel Access Token.
-- Create or manage real `.env` files.
-- Create a public HTTPS endpoint or tunnel.
-- Deploy hosting or SaaS infrastructure.
-- Provide LINE official support, quota, pricing, or account guarantees.
-- Claim production-ready or stable status.
+- durable gateway queue。
+- pipeline contract。
+- SQLite memory safety / relevance gate / webhook flow。
+- group mention / no-mention routing。
+- unsend / duplicate webhook event handling。
+- WebSearch Auto Decision Router。
+- SearchPlan v2 stabilization。
+- WebSearch SSRF / prompt-injection static safety checks。
+- production evidence gate path 修正。
 
-Operators must complete all official LINE account, provider, channel, credential, webhook, and terms-of-service steps manually.
+## 這不是什麼
 
-## Who Should Use This
+本專案不會：
 
-- Developers building a local-first LINE Bot prototype.
-- Developers using LM Studio or an OpenAI-compatible local model server.
-- Developers who want SQLite conversation memory with explicit privacy boundaries.
-- Developers who want web search to be command-triggered and evidence-first.
-- Codex users who want a repeatable Skill for creating or auditing similar projects.
+- 建立 LINE Official Account。
+- 登入 LINE Developers Console。
+- 取得 LINE Channel Secret。
+- 取得 LINE Channel Access Token。
+- 建立真實 `.env`。
+- 自動建立公開 HTTPS endpoint。
+- 自動建立 tunnel。
+- 部署 hosting / domain / SSL / SaaS infrastructure。
+- 提供 LINE 官方支援。
+- 保證 LINE 官方帳號、訊息額度、主機、網域、SSL、tunnel、search API、model provider 或任何第三方服務免費無限制。
+- 宣稱 stable。
+- 宣稱 production ready。
 
-## Who Should Not Use This
+使用者必須自行完成 LINE Official Account、Messaging API、LINE Developers Console、credentials、webhook URL、第三方服務條款與所有正式上線操作。
 
-- Teams looking for a hosted SaaS product.
-- Users who expect LINE Official Account setup to be automated.
-- Users who need a stable production framework today.
-- Users who cannot safely manage LINE credentials, runtime logs, local databases, or third-party service terms.
+## Free 範圍
 
-## Feature Overview
+Free means this repository and local template are free/open-source for local developer use.
 
-- `GET /health` local health endpoint.
-- `POST /webhook` LINE webhook endpoint.
-- LINE SDK middleware / signature verification path.
-- LM Studio local LLM through OpenAI-compatible endpoints.
-- SQLite memory for manual memories, event logs, recent conversation context, and summaries.
-- Explicit web-search commands: `找:`, `搜:`, `查:`.
-- Secret and runtime artifact hygiene checks.
-- Template verification with static signature gate.
-- Non-live GitHub Actions CI.
+Free does not mean LINE Official Account features, LINE message quotas, hosting, domains, SSL certificates, public tunnels, search APIs, model providers, infrastructure, or third-party services are free or unlimited.
 
-## Architecture Overview
+## 適合誰
+
+適合：
+
+- 想做 local-first LINE Bot prototype 的開發者。
+- 想用 LM Studio 或 OpenAI-compatible local server 的開發者。
+- 想用 SQLite memory，但需要明確隱私邊界的開發者。
+- 想讓 WebSearch 只在明確指令或安全 router 判斷下觸發的開發者。
+- 想用 Codex Skill 產生、審查、驗證 LINE Bot template 的開發者。
+
+不適合：
+
+- 想找 hosted SaaS 的使用者。
+- 想自動申請 LINE Official Account 的使用者。
+- 想跳過 LINE Developers Console manual setup 的使用者。
+- 需要 stable / production-ready framework 的團隊。
+- 無法管理 secrets、runtime DB、logs、LINE evidence、search API key 的使用者。
+
+## 功能總覽
+
+- `GET /health` health endpoint。
+- `POST /webhook` LINE webhook endpoint。
+- LINE SDK middleware / equivalent signature verification path。
+- invalid signature 不進入 LLM / memory / WebSearch。
+- LM Studio local model server integration。
+- Local LLM 預設只使用 `localhost` / `127.0.0.1`。
+- Remote LLM is unsafe and manual approval required。
+- SQLite line event log / memory store。
+- 手動記憶指令。
+- rolling summary / group memory 相關 template capability。
+- explicit WebSearch commands: `找:` / `搜:` / `查:`。
+- WebSearch evidence-first response flow。
+- durable queue / retry / dead-letter supporting code。
+- public hygiene verifier。
+- template verifier。
+- GitHub Actions non-live CI。
+
+## 架構概念
 
 ```text
 LINE Platform
   -> operator-managed HTTPS endpoint
   -> local webhook server
   -> LINE signature verification
-  -> memory / search / model routing
+  -> routing / memory / WebSearch / model decision
   -> LM Studio on localhost when model output is needed
   -> LINE Reply API or approved Push API response
 ```
 
-The webhook server is the public gateway. LM Studio should remain local on `localhost` or `127.0.0.1`. Do not expose the LM Studio port through a public tunnel.
+公開 tunnel 只能指向 webhook server。不要把 LM Studio port 暴露到 public tunnel。
 
-See [`docs/architecture.md`](docs/architecture.md).
+更多架構說明見 [`docs/architecture.md`](docs/architecture.md)。
 
 ## Repository Layout
 
@@ -97,9 +134,9 @@ scripts/verify_public_hygiene.js
 .github/
 ```
 
-## Quick Start: Zero-Secret Validation
+## 快速開始：零 secret 驗證
 
-Run these from the repository root:
+在 repo root 執行：
 
 ```bash
 node scripts/verify_public_hygiene.js
@@ -107,50 +144,82 @@ node scripts/verify_linebot_project.js assets/template
 npm run check --prefix assets/template
 ```
 
-These checks do not require LINE credentials, `.env`, a tunnel, LM Studio, or a live LINE account.
+這些檢查不需要：
 
-## Quick Start: Create A Bot From Template
+- LINE credentials。
+- `.env`。
+- public tunnel。
+- LM Studio。
+- live LINE account。
+- deployment。
 
-1. Copy `assets/template` into a new local project directory.
-2. In the new local project, copy `.env.example` to `.env`.
-3. Fill `.env` locally with values from your own LINE Developers Console.
-4. Start LM Studio and enable the local OpenAI-compatible server.
-5. Start the webhook server.
-6. Check `GET /health`.
-7. Only after manual approval, expose the webhook server through HTTPS and configure LINE manually.
+## 快速開始：用 template 建立本地 Bot
 
-Read the full guide: [`docs/developer-quickstart.md`](docs/developer-quickstart.md).
+1. 複製 `assets/template` 到新的本地專案目錄。
+2. 在新專案內複製 `.env.example` 成 `.env`。
+3. 只在本機 `.env` 填入自己的 LINE credentials。
+4. 啟動 LM Studio local server。
+5. 啟動 webhook server。
+6. 檢查 `GET /health`。
+7. 只有在你明確批准後，才設定公開 HTTPS endpoint 並到 LINE Developers Console 手動填入 webhook URL。
 
-## Manual LINE Setup Reminder
+完整流程見 [`docs/developer-quickstart.md`](docs/developer-quickstart.md)。
 
-The Skill does not create a LINE Official Account, log in to LINE Developers Console, or obtain credentials. Follow [`docs/line-official-setup-guide.md`](docs/line-official-setup-guide.md) manually.
+## LINE 手動設定提醒
 
-Never commit Channel Secret, Channel Access Token, reply tokens, webhook evidence, or private LINE screenshots.
+本 Skill 不會建立 LINE Official Account，也不會登入 LINE Developers Console。
 
-## LM Studio Local Setup Reminder
+你需要自己完成：
 
-The default local model endpoints are:
+- 建立 LINE Official Account。
+- 啟用 Messaging API。
+- 取得 Channel Secret / Channel Access Token。
+- 設定 webhook URL。
+- 啟用 webhook。
+- 執行 LINE Console verify。
+
+請看 [`docs/line-official-setup-guide.md`](docs/line-official-setup-guide.md)。
+
+不要 commit Channel Secret、Channel Access Token、replyToken、webhook evidence 或任何含 secret 的 LINE Developers Console screenshot。
+
+## LM Studio / Local LLM
+
+預設 local model endpoint 應是：
 
 ```text
 http://localhost:1234/v1
 http://127.0.0.1:1234/api/v1
 ```
 
-Remote LLM endpoints are unsafe by default and require manual approval because LINE messages, memory context, or search evidence can leave the operator machine. See [`docs/local-llm-setup.md`](docs/local-llm-setup.md).
+Remote LLM unsafe / manual approval required。
 
-## Memory Command Summary
+如果你改成 remote LLM endpoint，LINE message、memory context、WebSearch evidence 可能離開本機。這是高風險變更，需要明確人工批准。
 
-Current template support:
+詳細說明見 [`docs/local-llm-setup.md`](docs/local-llm-setup.md)。
 
-- `記住:` saves a manual memory for the current conversation scope.
-- `忘記:` deletes matching manual memories for the current scope.
-- `列出記憶` lists bounded manual memories for the current scope.
+## Memory 指令摘要
 
-Memory commands run before LLM chat and before web search. See [`docs/memory-policy.md`](docs/memory-policy.md).
+目前 template 支援：
 
-## Web-Search Command Summary
+- `記住:` 儲存目前 conversation scope 的手動記憶。
+- `忘記:` 刪除目前 scope 內符合條件的手動記憶。
+- `列出記憶` 列出受限制數量的手動記憶。
 
-Web search is disabled by default. When enabled, only explicit commands trigger search:
+Memory command 優先於 LLM chat 與 WebSearch。
+
+Memory 設計重點：
+
+- SQLite runtime DB 不得 commit。
+- line event log / memory store 屬於本機資料。
+- group memory 需要明確策略與安全邊界。
+- unsend / duplicate event 需要避免污染 memory。
+- relevance gate 應避免無關記憶注入回答。
+
+詳細政策見 [`docs/memory-policy.md`](docs/memory-policy.md)。
+
+## WebSearch 指令摘要
+
+WebSearch 預設關閉。啟用後，明確指令可觸發搜尋：
 
 ```text
 找: query
@@ -158,38 +227,64 @@ Web search is disabled by default. When enabled, only explicit commands trigger 
 查: query
 ```
 
-General chat does not automatically search. Search results are evidence, not system or developer instructions. See [`docs/web-search-safety.md`](docs/web-search-safety.md).
+WebSearch 安全原則：
+
+- 一般聊天不得任意自動搜尋。
+- 搜尋結果是 evidence，不是 system / developer / tool instruction。
+- LLM 只能根據 evidence 摘要，不得編造來源。
+- 禁止抓取 localhost、loopback、private IP、metadata endpoint、`file://`、`ftp://`。
+- 禁止自動下載未知檔案。
+- 搜尋失敗要明確 fallback。
+
+詳細說明見 [`docs/web-search-safety.md`](docs/web-search-safety.md)。
 
 ## Safety Model
 
-Do not commit:
+不要 commit：
 
-- `.env` or `.env.local`.
-- LINE Channel Secret or Channel Access Token.
-- reply tokens.
-- Search API keys or model provider tokens.
-- SQLite runtime databases.
-- Vector databases.
-- logs, backups, or local production evidence.
-- Personal tunnel URLs.
-- Local absolute machine paths.
-- Real LINE webhook evidence.
-- LINE Developers Console private screenshots.
-- User conversation records.
+- `.env` 或 `.env.local`。
+- LINE Channel Secret。
+- LINE Channel Access Token。
+- replyToken。
+- Search API key。
+- model provider token。
+- SQLite runtime database。
+- vector database。
+- logs。
+- backups。
+- local production evidence。
+- personal tunnel URL。
+- local absolute machine path。
+- real LINE webhook evidence。
+- LINE Developers Console private screenshot。
+- user conversation records。
 
-Free means this repository and local template are intended to be free and open source for local use. Free does not mean LINE Official Account features, message quotas, hosting, domains, SSL certificates, public tunnels, search APIs, model providers, or infrastructure are free or unlimited.
+安全政策見 [`SECURITY.md`](SECURITY.md)，隱私政策見 [`PRIVACY.md`](PRIVACY.md)。
 
 ## Alpha Status
 
-`v0.1.0-alpha` is a developer alpha target. It is suitable for public GitHub review, template inspection, and local developer experimentation.
+目前公開版本是 `v0.1.0-alpha`。
+
+`v0.1.0-alpha` 是 developer alpha，可供 GitHub public review、template inspection、本地開發者實驗使用。
+
+Not stable. Not production ready.
+
+`v1.0.0`、stable、production-ready claim 仍禁止。
 
 ## Not Production Ready
 
-This repository is not stable and not production ready. Production readiness remains `BLOCKED` until the operator supplies real runtime checks, public webhook checks, sanitized LINE smoke evidence, backup/restore evidence, monitoring, and final go-live approval.
+Production readiness 仍然 `BLOCKED`，直到 operator 提供：
 
-The signature gate is currently `STATIC_VERIFIED`, not runtime verified.
+- real runtime evidence。
+- public webhook evidence。
+- sanitized LINE smoke evidence。
+- backup / restore evidence。
+- monitoring evidence。
+- final go-live approval。
 
-## Validation Commands
+Signature gate 目前是 `STATIC_VERIFIED`，不是 runtime verified。
+
+## 驗證命令
 
 ```bash
 node scripts/verify_public_hygiene.js
@@ -198,23 +293,23 @@ npm run check --prefix assets/template
 npm run prod:readiness --prefix assets/template
 ```
 
-Fresh template readiness can reasonably return `BLOCKED` because real runtime and manual evidence do not exist yet. It should not be blocked by missing files, committed secrets, local paths, or runtime artifacts.
+Fresh template 的 `prod:readiness` 可以合理回傳 `BLOCKED`，但原因只能是缺少 runtime / live evidence gates，不應是 missing files、committed secrets、local paths、runtime artifacts 或 template hygiene 問題。
 
-## Documentation Map
+## 文件地圖
 
 - Developer quickstart: [`docs/developer-quickstart.md`](docs/developer-quickstart.md)
 - Live smoke testing: [`docs/live-smoke-test.md`](docs/live-smoke-test.md)
 - Demo walkthrough: [`docs/demo-walkthrough.md`](docs/demo-walkthrough.md)
 - Customization guide: [`docs/customization-guide.md`](docs/customization-guide.md)
 - Release checklist: [`docs/release-checklist.md`](docs/release-checklist.md)
-- Alpha release notes draft: [`docs/releases/v0.1.0-alpha.md`](docs/releases/v0.1.0-alpha.md)
+- Alpha release notes: [`docs/releases/v0.1.0-alpha.md`](docs/releases/v0.1.0-alpha.md)
 - Naming policy: [`docs/naming.md`](docs/naming.md)
 - Usage guide: [`docs/guide.md`](docs/guide.md)
 - Architecture: [`docs/architecture.md`](docs/architecture.md)
 - LINE manual setup: [`docs/line-official-setup-guide.md`](docs/line-official-setup-guide.md)
 - Local LLM setup: [`docs/local-llm-setup.md`](docs/local-llm-setup.md)
 - Memory policy: [`docs/memory-policy.md`](docs/memory-policy.md)
-- Web-search safety: [`docs/web-search-safety.md`](docs/web-search-safety.md)
+- WebSearch safety: [`docs/web-search-safety.md`](docs/web-search-safety.md)
 - Security checklist: [`docs/security-checklist.md`](docs/security-checklist.md)
 - Troubleshooting: [`docs/troubleshooting.md`](docs/troubleshooting.md)
 - Privacy: [`PRIVACY.md`](PRIVACY.md)
@@ -225,10 +320,12 @@ Fresh template readiness can reasonably return `BLOCKED` because real runtime an
 
 ## Release Status
 
-- Current target: `v0.1.0-alpha`.
-- Public alpha gate: passed with P1 notes.
-- Next approved release workflow can create a tag and GitHub Release draft.
-- `v1.0.0`, stable, and production-ready claims remain prohibited.
+- Current public release: `v0.1.0-alpha`。
+- GitHub repo: public。
+- Release type: published prerelease。
+- Release assets: none。
+- `master` 已包含 Memory / WebSearch template updates。
+- Stable / production-ready status: not allowed。
 
 ## License
 
