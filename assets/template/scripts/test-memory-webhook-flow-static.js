@@ -119,6 +119,11 @@ assert.ok(
   "webhook enqueue should persist the sanitized line event log before durable processing"
 );
 assert.ok(
+  enqueueWebhookSource.includes("if (saveResult.duplicate && !saveResult.id)") &&
+    enqueueWebhookSource.includes('log("line_event_duplicate_requeued"'),
+  "webhook enqueue should requeue duplicate line-event logs when an existing log id is available"
+);
+assert.ok(
   enqueueWebhookSource.includes("volatileReplyTokens.set(normalizedEvent.webhookEventId, event.replyToken);"),
   "webhook enqueue should keep replyToken in volatile memory instead of durable payload"
 );

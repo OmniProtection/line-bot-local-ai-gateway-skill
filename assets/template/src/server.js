@@ -567,7 +567,7 @@ function createBotRuntime(deps = {}) {
   function enqueueWebhookEvent(event, requestId, index, options = {}) {
     const normalizedEvent = normalizeLineEvent(event, requestId, index);
     const saveResult = memoryStore.saveLineEventLog(normalizedEvent);
-    if (saveResult.duplicate) {
+    if (saveResult.duplicate && !saveResult.id) {
       log("line_event_duplicate_ignored", {
         request_id: requestId,
         webhook_event_id: normalizedEvent.webhookEventId,
@@ -584,7 +584,18 @@ function createBotRuntime(deps = {}) {
         queue: null
       };
     }
-    if (!saveResult.inserted) {
+    if (saveResult.duplicate) {
+      log("line_event_duplicate_requeued", {
+        request_id: requestId,
+        webhook_event_id: normalizedEvent.webhookEventId,
+        line_event_log_id: saveResult.id,
+        event_index: index,
+        event_type: normalizedEvent.eventType,
+        message_type: normalizedEvent.messageType || "none",
+        source_type: normalizedEvent.sourceType
+      });
+    }
+    if (!saveResult.inserted && !saveResult.duplicate) {
       log("line_event_log_save_failed", {
         request_id: requestId,
         webhook_event_id: normalizedEvent.webhookEventId,

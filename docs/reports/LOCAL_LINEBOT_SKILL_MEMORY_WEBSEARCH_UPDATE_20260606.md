@@ -79,6 +79,7 @@ Codex PR review on PR #2 reported three P2 findings. They were addressed in a fo
 | Avoid persisting raw webhook events in durable payloads. | `webhook_event` durable jobs now persist only identifiers such as `webhookEventId` and `lineEventLogId`. Raw LINE events are not written into `jobs.payload_json`; reply tokens are kept only in process-local volatile memory. |
 | Preserve webhook replies when retrying after side effects. | Durable webhook retry now reloads the existing sanitized `line_event_log` record and passes the existing `lineEventLogId` back into `handleEvent`, so retry does not stop at the duplicate insert guard before reply side effects. |
 | Point evidence gates at the template docs directory. | Production evidence/readiness scripts now resolve productionization docs from `assets/template/docs/maintenance/...` through `PROJECT_ROOT/docs`, not the parent `assets/docs` path. |
+| Ensure duplicate logs still enqueue durable jobs. | Duplicate `line_event_log` rows with an existing log id now continue through idempotent durable job enqueue, so LINE redelivery can recover a crash between log insert and job insert. |
 
 Additional validation after review fixes:
 
