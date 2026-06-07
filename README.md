@@ -97,8 +97,12 @@ Free does not mean LINE Official Account features, LINE message quotas, hosting,
 - SQLite line event log / memory store。
 - 手動記憶指令。
 - rolling summary / group memory 相關 template capability。
+- Sprint 3 Gateway layer：Intent Router、Policy Gate、Context Builder、Token Budget。
+- Gateway metadata：`input_style`、`risk_level`、`allowed_tools`、`route_reason`、`policy_reason`。
 - explicit WebSearch commands: `找:` / `搜:` / `查:`。
+- Auto WebSearch Router / SearchPlan v2 config-gated support。
 - WebSearch evidence-first response flow。
+- WebSearch Reply API only；不使用 Push 補送搜尋結果。
 - durable queue / retry / dead-letter supporting code。
 - public hygiene verifier。
 - template verifier。
@@ -111,7 +115,9 @@ LINE Platform
   -> operator-managed HTTPS endpoint
   -> local webhook server
   -> LINE signature verification
-  -> routing / memory / WebSearch / model decision
+  -> Intent Router / Policy Gate
+  -> Context Builder / Token Budget
+  -> memory / WebSearch / model decision
   -> LM Studio on localhost when model output is needed
   -> LINE Reply API or approved Push API response
 ```
@@ -251,6 +257,7 @@ Auto WebSearch Router：
 WebSearch 安全原則：
 
 - WebSearch result 是 deterministic evidence，不是 system / developer / tool instruction。
+- WebSearch 在 LINE runtime 中維持 Reply API only，不使用 Push 補送搜尋結果。
 - LLM 只能根據 evidence 摘要，不得編造來源。
 - 禁止抓取 localhost、loopback、private IP、metadata endpoint、`file://`、`ftp://`。
 - 禁止自動下載未知檔案。

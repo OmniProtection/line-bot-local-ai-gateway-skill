@@ -158,8 +158,8 @@ assert.ok(
   "general reply job should call LM Studio in the background"
 );
 assert.ok(
-  generalJobSource.includes("excludeLineEventLogId: job.lineEventLogId"),
-  "general reply job should exclude the current inbound event from memory context"
+  generalJobSource.includes("lineEventLogId: job.lineEventLogId"),
+  "general reply job should pass the current inbound event id to Context Builder for exclusion"
 );
 assert.ok(
   generalJobSource.includes("memoryStore.saveShortTermExchange(job.scope, job.modelInput, reply);"),

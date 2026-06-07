@@ -15,6 +15,7 @@ const {
   summarizeGroupMemoryBatch,
   summarizeRollingConversationBatch
 } = require("./lmStudioClient");
+const { buildContextPackage } = require("./contextBuilder");
 const { createMemoryStore, sanitizeMemoryText } = require("./memoryStore");
 const {
   buildPipelineRequest,
@@ -22,6 +23,8 @@ const {
   normalizeLineEvent: normalizePipelineLineEvent,
   redactRawEvent: redactPipelineRawEvent
 } = require("./pipelineContract");
+const { decideIntentRoute } = require("./intentRouter");
+const { evaluatePolicy } = require("./policyGate");
 const { clampReply, shouldHandleEvent } = require("./replyPolicy");
 const { errorClass, logEvent } = require("./logger");
 const { decideWebSearchRequest, getPushTarget, parseWebSearchCommand } = require("./webSearchCommand");
@@ -235,13 +238,23 @@ function createBotRuntime(deps = {}) {
     });
   }
 
-  function buildRequestFor(normalizedEvent, lineEventLogId, modelInput, route, responseMode) {
+  function buildRequestFor(
+    normalizedEvent,
+    lineEventLogId,
+    modelInput,
+    route,
+    responseMode,
+    routeDecision = null,
+    policyDecision = null
+  ) {
     return buildPipelineRequest({
       normalizedEvent,
       lineEventLogId,
       modelInput,
       route,
       responseMode,
+      routeDecision,
+      policyDecision,
       createdAt: nowIso()
     });
   }
@@ -912,19 +925,6 @@ function createBotRuntime(deps = {}) {
       : "general";
   }
 
-  function withSearchStatus(memoryContext, memoryOptions = {}) {
-    if (memoryOptions.webSearchPerformed !== false) {
-      return memoryContext;
-    }
-    return {
-      ...(memoryContext || {}),
-      searchStatus: {
-        webSearchPerformed: false,
-        reason: memoryOptions.searchDecisionReason || "search_not_performed"
-      }
-    };
-  }
-
   async function runReplyWebSearch(job, durableJob = null) {
     const startedAt = now();
     const deadlineMs = Number.isFinite(job.deadlineMs) ? job.deadlineMs : getReplySearchDeadlineMs();
@@ -1066,22 +1066,45 @@ function createBotRuntime(deps = {}) {
     const startedAt = now();
     let llmAttempted = false;
     let llmLogged = false;
+    const routeDecision =
+      job.routeDecision ||
+      decideIntentRoute({
+        modelInput: job.modelInput,
+        searchPlan: job.searchPlan || null
+      });
+    const policyDecision =
+      job.policyDecision || evaluatePolicy(routeDecision, { modelInput: job.modelInput });
     const context = {
       request_id: job.requestId,
       event_index: job.eventIndex,
       source_type: job.sourceType,
-      intent: "general_chat",
-      risk_level: "unknown",
+      intent: routeDecision.intent,
+      risk_level: policyDecision.risk_level,
       input_chars: job.modelInput.length
     };
 
     log("general_reply_job_started", context);
 
     try {
-      const memoryContext = withSearchStatus(memoryStore.loadRelevantMemoryContext(job.scope, job.modelInput, {
-        excludeLineEventLogId: job.lineEventLogId,
-        includeGroupMentionContext: job.includeGroupMentionContext === true
-      }), job);
+      const contextPackage = buildContextPackage({
+        scope: job.scope,
+        modelInput: job.modelInput,
+        routeDecision,
+        policyDecision,
+        lineEventLogId: job.lineEventLogId,
+        includeGroupMentionContext: job.includeGroupMentionContext === true,
+        memoryStore,
+        config
+      });
+      const memoryContext = contextPackage.memory_context;
+      log("context_builder_completed", {
+        ...context,
+        stage: "general_reply_job",
+        selected_chars: contextPackage.context_stats?.selected_chars || 0,
+        selected_estimated_tokens: contextPackage.context_stats?.selected_estimated_tokens || 0,
+        truncated: contextPackage.context_stats?.truncated === true,
+        section_counts: contextPackage.context_stats?.section_counts || {}
+      });
       llmAttempted = true;
       const modelResult = await services.askLocalModel(job.modelInput, config, memoryContext);
       recordLlmCall({
@@ -1288,6 +1311,9 @@ function createBotRuntime(deps = {}) {
       includeGroupMentionContext: memoryOptions.includeGroupMentionContext === true,
       webSearchPerformed: memoryOptions.webSearchPerformed,
       searchDecisionReason: memoryOptions.searchDecisionReason,
+      searchPlan: memoryOptions.searchPlan || null,
+      routeDecision: memoryOptions.routeDecision || null,
+      policyDecision: memoryOptions.policyDecision || null,
       createdAt: new Date(now()).toISOString(),
       createdAtMs: now()
     });
@@ -1349,6 +1375,15 @@ function createBotRuntime(deps = {}) {
 
   async function handleGeneralConversation(modelInput, scope, event, context, memoryOptions = {}) {
     const pushTarget = getPushTarget(event.source);
+    const routeDecision =
+      memoryOptions.routeDecision ||
+      decideIntentRoute({
+        event,
+        modelInput,
+        searchPlan: memoryOptions.searchPlan || null
+      });
+    const policyDecision =
+      memoryOptions.policyDecision || evaluatePolicy(routeDecision, { modelInput });
     if (!pushTarget) {
       log("general_reply_push_target_missing", context);
       await sendReply(event.replyToken, "目前無法在這個對話補送回覆。", {
@@ -1368,10 +1403,25 @@ function createBotRuntime(deps = {}) {
         timeout_ms: config.generalDirectModelTimeoutMs
       });
 
-      const memoryContext = withSearchStatus(memoryStore.loadRelevantMemoryContext(scope, modelInput, {
-        excludeLineEventLogId: memoryOptions.lineEventLogId,
-        includeGroupMentionContext: memoryOptions.includeGroupMentionContext === true
-      }), memoryOptions);
+      const contextPackage = buildContextPackage({
+        scope,
+        modelInput,
+        routeDecision,
+        policyDecision,
+        lineEventLogId: memoryOptions.lineEventLogId,
+        includeGroupMentionContext: memoryOptions.includeGroupMentionContext === true,
+        memoryStore,
+        config
+      });
+      const memoryContext = contextPackage.memory_context;
+      log("context_builder_completed", {
+        ...context,
+        stage: "general_direct_reply",
+        selected_chars: contextPackage.context_stats?.selected_chars || 0,
+        selected_estimated_tokens: contextPackage.context_stats?.selected_estimated_tokens || 0,
+        truncated: contextPackage.context_stats?.truncated === true,
+        section_counts: contextPackage.context_stats?.section_counts || {}
+      });
       let modelResult;
       try {
         modelResult = await services.askLocalModel(modelInput, config, memoryContext, {
@@ -1391,8 +1441,8 @@ function createBotRuntime(deps = {}) {
         callType: "general_direct_reply",
         context: {
           ...context,
-          intent: "general_chat",
-          risk_level: "unknown"
+          intent: routeDecision.intent,
+          risk_level: policyDecision.risk_level
         },
         scope,
         modelInput,
@@ -1510,13 +1560,23 @@ function createBotRuntime(deps = {}) {
     context.webhook_event_id = normalizedEvent.webhookEventId;
     const saveResult =
       options.lineEventLogSaveResult || memoryStore.saveLineEventLog(normalizedEvent);
-    const recordRoute = (route, responseMode, modelInput = null, status = "completed", fallbackReason = null) => {
+    const recordRoute = (
+      route,
+      responseMode,
+      modelInput = null,
+      status = "completed",
+      fallbackReason = null,
+      routeDecision = null,
+      policyDecision = null
+    ) => {
       const pipelineRequest = buildRequestFor(
         normalizedEvent,
         saveResult.id,
         modelInput,
         route,
-        responseMode
+        responseMode,
+        routeDecision,
+        policyDecision
       );
       recordPipeline(pipelineRequest, {
         jobId: durableJob?.id || null,
@@ -1525,6 +1585,24 @@ function createBotRuntime(deps = {}) {
         fallbackReason
       });
       return pipelineRequest;
+    };
+    const decideRoutePolicy = (params = {}) => {
+      const modelInputForDecision = params.modelInput ?? normalizedEvent.text ?? "";
+      const routeDecision = decideIntentRoute({
+        event,
+        normalizedEvent,
+        modelInput: modelInputForDecision,
+        hasReplyToken: params.hasReplyToken ?? Boolean(event.replyToken),
+        shouldHandle: params.shouldHandle ?? shouldHandleEvent(event),
+        memoryCommand: params.memoryCommand || null,
+        searchCommand: params.searchCommand || null,
+        searchPlan: params.searchPlan || null
+      });
+      const policyDecision = evaluatePolicy(routeDecision, {
+        modelInput: modelInputForDecision,
+        sourceType: context.source_type
+      });
+      return { routeDecision, policyDecision };
     };
 
     if (saveResult.duplicate) {
@@ -1541,7 +1619,8 @@ function createBotRuntime(deps = {}) {
 
     if (normalizedEvent.eventType === "unsend") {
       memoryStore.markLineMessageUnsent(normalizedEvent.messageId, normalizedEvent.conversationKey);
-      recordRoute("unsend", "none");
+      const { routeDecision, policyDecision } = decideRoutePolicy({ modelInput: normalizedEvent.text || "" });
+      recordRoute("unsend", "none", null, "completed", null, routeDecision, policyDecision);
       return;
     }
 
@@ -1550,13 +1629,29 @@ function createBotRuntime(deps = {}) {
         ...context,
         reason: "missing_reply_token"
       });
-      recordRoute("ignored_no_reply_token", "none", normalizedEvent.text);
+      const { routeDecision, policyDecision } = decideRoutePolicy({
+        modelInput: normalizedEvent.text || "",
+        hasReplyToken: false
+      });
+      recordRoute(
+        "ignored_no_reply_token",
+        "none",
+        normalizedEvent.text,
+        "completed",
+        null,
+        routeDecision,
+        policyDecision
+      );
       return;
     }
 
     if (!shouldHandleEvent(event)) {
       log("non_text_message_ignored", context);
-      recordRoute("ignored_non_text", "none");
+      const { routeDecision, policyDecision } = decideRoutePolicy({
+        modelInput: normalizedEvent.text || "",
+        shouldHandle: false
+      });
+      recordRoute("ignored_non_text", "none", null, "completed", null, routeDecision, policyDecision);
       return;
     }
 
@@ -1574,7 +1669,16 @@ function createBotRuntime(deps = {}) {
 
       if (!isBotMentioned(event.message)) {
         log("group_message_ignored_no_self_mention", context);
-        recordRoute("group_no_mention", "none", modelInput);
+        const { routeDecision, policyDecision } = decideRoutePolicy({ modelInput });
+        recordRoute(
+          "group_no_mention",
+          "none",
+          modelInput,
+          "completed",
+          null,
+          routeDecision,
+          policyDecision
+        );
         return;
       }
 
@@ -1585,7 +1689,23 @@ function createBotRuntime(deps = {}) {
 
       if (!modelInput) {
         log("group_mention_text_empty", context);
-        recordRoute("unknown", "reply", modelInput, "completed", "empty_group_mention");
+        const routeDecision = decideIntentRoute({
+          event,
+          normalizedEvent,
+          modelInput,
+          hasReplyToken: true,
+          shouldHandle: true
+        });
+        const policyDecision = evaluatePolicy(routeDecision, { modelInput, sourceType: context.source_type });
+        recordRoute(
+          "unknown",
+          "reply",
+          modelInput,
+          "completed",
+          "empty_group_mention",
+          routeDecision,
+          policyDecision
+        );
         await sendReply(event.replyToken, "請在 @冥王星 後面加上你要問的內容。", {
           ...context,
           fallback_used: false,
@@ -1601,17 +1721,29 @@ function createBotRuntime(deps = {}) {
 
     const memoryCommand = parseMemoryCommand(modelInput);
     if (memoryCommand) {
-      recordRoute("memory_command", "reply", modelInput);
+      const { routeDecision, policyDecision } = decideRoutePolicy({ modelInput, memoryCommand });
+      recordRoute(
+        "memory_command",
+        "reply",
+        modelInput,
+        "completed",
+        null,
+        routeDecision,
+        policyDecision
+      );
       await handleMemoryCommand(memoryCommand, scope, event, context);
       return;
     }
 
     const searchCommand = parseWebSearchCommand(modelInput);
     if (searchCommand.matched) {
-      recordRoute("web_search", "reply", modelInput);
+      const { routeDecision, policyDecision } = decideRoutePolicy({ modelInput, searchCommand });
+      recordRoute("web_search", "reply", modelInput, "completed", null, routeDecision, policyDecision);
       await handleWebSearchCommand(searchCommand, event, context, {
         lineEventLogId: saveResult.id,
-        forcedSearch: true
+        forcedSearch: true,
+        routeDecision,
+        policyDecision
       });
       return;
     }
@@ -1624,7 +1756,11 @@ function createBotRuntime(deps = {}) {
       )
     });
     if (searchDecision.needsSearch === true) {
-      recordRoute("web_search", "reply", modelInput);
+      const { routeDecision, policyDecision } = decideRoutePolicy({
+        modelInput,
+        searchPlan: searchDecision
+      });
+      recordRoute("web_search", "reply", modelInput, "completed", null, routeDecision, policyDecision);
       await runReplyWebSearch({
         requestId: context.request_id,
         webhookEventId: context.webhook_event_id,
@@ -1644,12 +1780,27 @@ function createBotRuntime(deps = {}) {
       return;
     }
 
-    recordRoute("general_chat", "reply_or_push", modelInput);
+    const { routeDecision, policyDecision } = decideRoutePolicy({
+      modelInput,
+      searchPlan: searchDecision
+    });
+    recordRoute(
+      "general_chat",
+      "reply_or_push",
+      modelInput,
+      "completed",
+      null,
+      routeDecision,
+      policyDecision
+    );
     await handleGeneralConversation(modelInput, scope, event, context, {
       lineEventLogId: saveResult.id,
       includeGroupMentionContext,
       webSearchPerformed: false,
-      searchDecisionReason: searchDecision.reason || "no_search"
+      searchDecisionReason: searchDecision.reason || "no_search",
+      searchPlan: searchDecision,
+      routeDecision,
+      policyDecision
     });
   }
 

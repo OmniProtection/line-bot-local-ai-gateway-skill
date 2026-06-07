@@ -100,7 +100,7 @@ function run() {
   );
   const generalJobIndex = server.indexOf("async function runGeneralReplyJob");
   const memoryContextIndex = server.indexOf(
-    "const memoryContext = withSearchStatus(memoryStore.loadRelevantMemoryContext(job.scope, job.modelInput, {"
+    "const contextPackage = buildContextPackage({"
   );
   const shortTermSaveIndex = server.indexOf(
     "memoryStore.saveShortTermExchange(job.scope, job.modelInput, reply);"
@@ -110,7 +110,7 @@ function run() {
   assert.notEqual(searchCommandIndex, -1, "web search branch should exist");
   assert.notEqual(generalConversationIndex, -1, "normal conversation handoff should exist");
   assert.notEqual(generalJobIndex, -1, "normal conversation background job should exist");
-  assert.notEqual(memoryContextIndex, -1, "normal memory retrieval job branch should exist");
+  assert.notEqual(memoryContextIndex, -1, "normal context builder job branch should exist");
   assert.ok(
     memoryCommandIndex < searchCommandIndex,
     "memory commands must keep priority over web search commands"
@@ -121,7 +121,7 @@ function run() {
   );
   assert.ok(
     generalJobIndex < memoryContextIndex,
-    "normal memory retrieval should happen inside the background general reply job"
+    "normal context building should happen inside the background general reply job"
   );
   assert.ok(
     memoryContextIndex < shortTermSaveIndex,
