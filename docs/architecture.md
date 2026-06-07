@@ -32,6 +32,7 @@ The webhook server is the only component intended to receive public LINE webhook
 - KB evidence is separate from LINE chat memory and should be treated as project-local technical knowledge.
 - Handoff tickets are local SQLite operational records for policy, validator, search, model, or admin-created follow-up cases.
 - Admin API is disabled by default, localhost-only by default, token-gated when enabled, and has no LINE send endpoint.
+- Tool confirmation records are local SQLite pending approvals for explicit tool requests.
 
 ## Sprint 3 Gateway Layer
 
@@ -66,6 +67,19 @@ Sprint 5 adds a local human handoff foundation without changing outbound LINE de
 - Admin summary and draft generation are on-demand admin operations only; they do not run inside the webhook path.
 
 The Admin API intentionally has no route that sends, pushes, broadcasts, multicasts, or narrowcasts LINE messages.
+
+## Sprint 6 Tool Confirmation Gate
+
+Sprint 6 adds a conservative local tool gate before any user-triggered local-write tool executes:
+
+- `toolRegistry.js`: defines known tools, actor scope, access level, risk level, executor, and confirmation requirement.
+- `permissionGate.js`: rejects actor-scope mismatches, admin-tool access from LINE actors, external mutations, and secret-operation payloads.
+- `confirmationStore.js`: stores pending confirmations in local SQLite with sanitized payloads and TTL.
+- `agentLite.js`: parses only explicit tool requests, such as `建立工單:` / `開工單:`.
+- `server.js`: returns a confirmation code first; only `確認 CODE` executes the confirmed local handoff-ticket creation.
+- `adminApi.js`: applies permission checks to read-only ticket list/get routes.
+
+This layer does not add provider adapters, deployment, external tool execution, LINE Push/Broadcast/Multicast/Narrowcast tools, or a multi-step autonomous agent loop.
 
 ## Manual External Steps
 

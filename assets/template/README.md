@@ -42,6 +42,15 @@ Sprint 5 adds a local Handoff / Ticket / Admin API foundation:
 - Admin summary / draft generation is admin on-demand only and is not part of the webhook path.
 - Admin API has no endpoint that sends LINE messages.
 
+Sprint 6 adds a Tool Confirmation Gate:
+
+- `toolRegistry.js` defines allowed local tools and their risk / actor / confirmation metadata.
+- `permissionGate.js` denies external mutation, secret operations, and actor-scope mismatches.
+- `confirmationStore.js` stores pending tool confirmations in local SQLite.
+- `agentLite.js` only parses explicit tool requests such as `建立工單:` / `開工單:`.
+- LINE users must reply `確認 CODE` before the confirmed local handoff-ticket tool executes.
+- This is not a multi-step autonomous agent loop and does not add deployment, provider adapters, or LINE push/broadcast tools.
+
 Remote LLM endpoints are unsafe by default. Changing `LOCAL_MODEL_BASE_URL` away from `localhost` or `127.0.0.1` can send LINE message content, memory context, or search evidence away from the operator machine and requires explicit manual approval.
 
 ## Defaults
@@ -73,6 +82,7 @@ Remote LLM endpoints are unsafe by default. Changing `LOCAL_MODEL_BASE_URL` away
 - Admin API localhost-only: enabled by default
 - Human handoff ticketing: enabled by default
 - Human handoff reply text: `這件事需要人工確認，我已先記錄下來。`
+- Tool confirmations: local SQLite only, created only from explicit tool requests
 - LM Studio `npacker/web-tools` search path: disabled by default
 - DuckDuckGo fallback: disabled by default
 - Server port: `3000`
@@ -235,9 +245,18 @@ Handoff / Admin API checks:
 - Casual chat should not create tickets.
 - Admin audit logs must not store admin token values.
 
+Tool Confirmation checks:
+
+- `建立工單: 內容` should return a confirmation code instead of creating the ticket immediately.
+- `確認 CODE` should execute the confirmed local ticket creation when the code, actor, and scope match.
+- `取消 CODE` should cancel the pending confirmation.
+- External mutation or secret-operation payloads must be denied by `permissionGate.js`.
+- LINE actors must not access admin-only tools.
+- Admin API list/get permissions must remain read-only.
+
 ## Limits
 
-This MVP does not create a LINE Official Account, retrieve credentials, configure LINE Developers Console, install tunnel tools, deploy hosting, add embeddings, create a vector DB, send LINE messages from Admin API, or guarantee model quality.
+This MVP does not create a LINE Official Account, retrieve credentials, configure LINE Developers Console, install tunnel tools, deploy hosting, add embeddings, create a vector DB, send LINE messages from Admin API, run an autonomous multi-step agent loop, or guarantee model quality.
 
 ## Related Safety Docs
 

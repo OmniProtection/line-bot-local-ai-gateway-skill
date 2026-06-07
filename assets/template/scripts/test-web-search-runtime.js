@@ -72,6 +72,8 @@ function testReplyLengthHardLimit() {
 }
 
 function createFakeMemoryStore() {
+  let lineEventIdSequence = 0;
+  const lineEventsByWebhookId = new Map();
   const calls = {
     conversationSummarySaves: [],
     longTermSaves: [],
@@ -79,11 +81,31 @@ function createFakeMemoryStore() {
     lineEvents: []
   };
 
+  function lineEventLogRow(normalizedEvent, id) {
+    return {
+      id,
+      webhook_event_id: normalizedEvent.webhookEventId,
+      event_type: normalizedEvent.eventType,
+      event_timestamp_ms: normalizedEvent.timestamp,
+      delivery_is_redelivery: normalizedEvent.deliveryIsRedelivery ? 1 : 0,
+      source_type: normalizedEvent.sourceType,
+      sender_user_id: normalizedEvent.senderUserId,
+      group_id: normalizedEvent.groupId,
+      room_id: normalizedEvent.roomId,
+      message_id: normalizedEvent.messageId,
+      message_type: normalizedEvent.messageType,
+      text: normalizedEvent.text,
+      mention_json: normalizedEvent.mentionJson,
+      quoted_message_id: normalizedEvent.quotedMessageId
+    };
+  }
+
   return {
     calls,
     deleteLongTermMemories: () => ({ deletedCount: 0 }),
     getActiveLineEventIdsForMemory: (_scope, ids) => ids,
     getConversationSummary: () => null,
+    getLineEventLogByWebhookId: (webhookEventId) => lineEventsByWebhookId.get(webhookEventId) || null,
     getPendingAutoMemoryBatch: () => [],
     getPendingRollingSummaryBatch: () => [],
     listLongTermMemories: () => [],
@@ -92,7 +114,9 @@ function createFakeMemoryStore() {
     markLineMessageUnsent: () => {},
     saveLineEventLog: (event) => {
       calls.lineEvents.push(event);
-      return { inserted: true, duplicate: false };
+      const id = ++lineEventIdSequence;
+      lineEventsByWebhookId.set(event.webhookEventId, lineEventLogRow(event, id));
+      return { inserted: true, duplicate: false, id };
     },
     saveConversationSummary: (scope, summary, metadata) => {
       calls.conversationSummarySaves.push({ scope, summary, metadata });

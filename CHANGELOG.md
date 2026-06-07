@@ -4,6 +4,10 @@ All notable changes to this project will be documented here.
 
 ## Unreleased
 
+- Added Sprint 6 Tool Confirmation Gate with local tool registry, permission gate, confirmation store, and agent-lite explicit tool planning.
+- Added pending confirmation flow for explicit local handoff-ticket requests before creating a ticket.
+- Added Admin API permission checks for read-only ticket list/get tools.
+- Added Sprint 6 tests for tool registry, permission gate, agent-lite, confirmation store, and runtime confirmation flow.
 - Added Sprint 5 Handoff / Ticket / Admin API foundation with local SQLite tickets, events, drafts, and admin audit logs.
 - Added disabled-by-default localhost-only Admin API with token gate and no LINE send endpoint.
 - Added handoff ticket creation for policy high-risk requests, KB-insufficient fallback, WebSearch final failure, and model hard fallback paths.
