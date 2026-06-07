@@ -4,19 +4,26 @@ This is a non-official local-first LINE Bot template. It is not affiliated with,
 
 Free means the local template is intended to be free and open source for local use. It does not mean LINE Official Account features, message quotas, hosting, domains, SSL, tunnels, search APIs, or third-party infrastructure are free or unlimited.
 
-Local-first LINE Bot MVP using Node.js, Express, LINE Messaging API Reply API, LINE Push API for background final replies, and LM Studio through its OpenAI-compatible local API.
+Local-first LINE Bot MVP using Node.js, Express, LINE Messaging API Reply API, LINE Push API for approved background general replies, and LM Studio through its OpenAI-compatible local API.
 
 ## Architecture
 
 ```text
-LINE -> webhook server -> direct Reply for short chat, or pending Reply -> background LM Studio local API -> LINE Push API final message
+LINE -> webhook server -> signature verification -> Intent Router / Policy Gate -> Context Builder / Token Budget -> LM Studio local API when needed -> LINE Reply API or approved Push API
 ```
 
 The webhook server is the public gateway. Keep LM Studio private on your machine; do not expose `http://localhost:1234` directly to the internet.
 
 The webhook endpoint returns HTTP 2xx immediately after LINE signature verification, then processes each event. Short general chats can attempt a direct Reply when they fit the configured length gate and finish within the direct model timeout. Other normal model conversations first send `GENERAL_PENDING_REPLY_TEXT`, then send the final LM Studio answer through LINE Push API to the same user, group, or room.
 
-Optional web search is disabled by default. When enabled, only messages that begin with `找:`, `搜:`, or `查:` use the web-search path. The bot replies immediately with the configured search pending text, then sends the finished sourced answer through LINE Push API. LINE web search uses deterministic web evidence first, then LM Studio summarizes that evidence; the experimental LM Studio `npacker/web-tools` path is not part of the LINE runtime search path because it can time out independently.
+Optional web search is disabled by default. When enabled, messages that begin with `找:`, `搜:`, or `查:` use the forced web-search path. Auto WebSearch can also be enabled through the config-gated SearchPlan router. LINE web search uses deterministic web evidence first, then LM Studio summarizes that evidence. Search answers stay on the LINE Reply API path; the runtime does not use Push API to supplement search answers.
+
+Sprint 3 adds a gateway layer:
+
+- `intentRouter.js`: memory command, forced WebSearch, auto WebSearch, general chat, ignored route, and unsend routing.
+- `policyGate.js`: tool permission and risk-level metadata.
+- `contextBuilder.js`: memory/context assembly and search-status guard.
+- `tokenBudget.js`: char-based context budgeting without a tokenizer dependency.
 
 Remote LLM endpoints are unsafe by default. Changing `LOCAL_MODEL_BASE_URL` away from `localhost` or `127.0.0.1` can send LINE message content, memory context, or search evidence away from the operator machine and requires explicit manual approval.
 
@@ -39,7 +46,8 @@ Remote LLM endpoints are unsafe by default. Changing `LOCAL_MODEL_BASE_URL` away
 - General direct model timeout: `1300` ms
 - General pending reply text: `思考中`
 - Web search: disabled by default
-- Web-search Push API result delivery: disabled by default
+- Web-search Reply API result delivery: enabled only when WebSearch is enabled
+- Web-search Push API result delivery: not used by the LINE runtime path
 - LM Studio `npacker/web-tools` search path: disabled by default
 - DuckDuckGo fallback: disabled by default
 - Server port: `3000`
@@ -147,7 +155,7 @@ Manual checks:
 - Short normal model conversations may use direct Reply when `GENERAL_DIRECT_REPLY_ENABLED=true`, input length is within `GENERAL_DIRECT_REPLY_MAX_INPUT_CHARS`, and LM Studio finishes within `GENERAL_DIRECT_MODEL_TIMEOUT_MS`.
 - Other normal model conversations use Reply API for `GENERAL_PENDING_REPLY_TEXT`, then Push API for the final LM Studio answer.
 - Memory commands still use Reply API and keep priority over model/search flows.
-- Web search Push API is only used when `WEB_SEARCH_ENABLED=true`, `WEB_SEARCH_BACKGROUND_PUSH_ENABLED=true`, and a message begins with `找:`, `搜:`, or `查:`.
+- Web search uses Reply API only in the LINE runtime path. `WEB_SEARCH_BACKGROUND_PUSH_ENABLED` must not be used to supplement search answers.
 - Broadcast, Multicast, and Narrowcast are not used.
 - LM Studio chat completions are called through `LOCAL_MODEL_BASE_URL`; optional `npacker/web-tools` search is called through `LOCAL_MODEL_REST_BASE_URL`.
 - Model timeout returns a safe fallback reply.
@@ -157,7 +165,7 @@ Web-search manual checks:
 
 - `你好` should direct Reply when the direct gate is enabled and LM Studio answers within the direct timeout; otherwise it should reply `思考中`, then Push the final model answer.
 - `今天新聞是什麼` should remain a normal conversation and should not trigger web search.
-- `查: 台積電今天股價` should trigger the two-stage web-search flow only when both web-search flags are enabled.
+- `查: 台積電今天股價` should trigger the Reply API web-search flow when WebSearch is enabled.
 - With `WEB_SEARCH_LMSTUDIO_TOOLS_ENABLED=true`, LM Studio must allow API clients to use `npacker/web-tools`; otherwise the bot returns `搜尋服務目前不可用，請稍後再試。` unless `WEB_SEARCH_DUCKDUCKGO_FALLBACK_ENABLED=true`.
 - `記住: 查: 測試` should use the memory command and should not search.
 - Group messages without a bot mention should not search or reply.

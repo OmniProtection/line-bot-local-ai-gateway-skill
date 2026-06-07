@@ -154,9 +154,15 @@ function buildPipelineRequest({
   modelInput = null,
   route = "unknown",
   responseMode = "none",
+  routeDecision = null,
+  policyDecision = null,
   createdAt = new Date().toISOString()
 }) {
-  const intent = intentForRoute(route);
+  const intent = routeDecision?.intent || intentForRoute(route);
+  const riskLevel = policyDecision?.risk_level || "unknown";
+  const allowedTools = Array.isArray(policyDecision?.allowed_tools) ? policyDecision.allowed_tools : [];
+  const resolvedResponseMode =
+    policyDecision?.response_mode || routeDecision?.response_mode || responseMode;
   return {
     request_id: normalizedEvent?.requestId || "",
     tenant_id: DEFAULT_TENANT_ID,
@@ -169,11 +175,14 @@ function buildPipelineRequest({
     },
     message: buildMessageMetadata(normalizedEvent, modelInput),
     intent,
-    risk_level: "unknown",
+    input_style: routeDecision?.input_style || "unknown",
+    risk_level: riskLevel,
     memory_context: {},
     knowledge_evidence: [],
-    allowed_tools: [],
-    response_mode: responseMode,
+    allowed_tools: allowedTools,
+    response_mode: resolvedResponseMode,
+    route_reason: routeDecision?.route_reason || null,
+    policy_reason: policyDecision?.policy_reason || null,
     route,
     created_at: createdAt
   };
