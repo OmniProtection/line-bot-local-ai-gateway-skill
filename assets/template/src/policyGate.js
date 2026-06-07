@@ -1,9 +1,14 @@
 const HIGH_RISK_ACTION_PATTERN =
-  /部署|deploy|刪除|delete|安裝|install|push\s+到|git\s+push|broadcast|multicast|narrowcast|群發|廣播|付費|付款|金鑰|token|secret/i;
+  /部署|deploy|刪除|delete|安裝|install|push\s+到|git\s+push|broadcast|multicast|narrowcast|群發|廣播|付費|付款/i;
+const SECRET_OPERATION_PATTERN =
+  /(給我|顯示|列出|查看|輸出|貼上|提供|設定|修改|使用|洩漏).{0,24}(金鑰|token|secret|access\s*token|channel\s*secret)|(金鑰|token|secret|access\s*token|channel\s*secret).{0,24}(給我|顯示|列出|查看|輸出|貼上|提供|設定|修改|使用|洩漏)/i;
 
 function isHighRiskExternalAction(routeDecision, metadata = {}) {
   const text = String(metadata.modelInput || "");
-  return routeDecision?.intent === "general_chat" && HIGH_RISK_ACTION_PATTERN.test(text);
+  return (
+    routeDecision?.intent === "general_chat" &&
+    (HIGH_RISK_ACTION_PATTERN.test(text) || SECRET_OPERATION_PATTERN.test(text))
+  );
 }
 
 function evaluatePolicy(routeDecision, metadata = {}) {

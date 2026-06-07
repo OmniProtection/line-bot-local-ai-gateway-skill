@@ -4,6 +4,10 @@ All notable changes to this project will be documented here.
 
 ## Unreleased
 
+- Added Sprint 5 Handoff / Ticket / Admin API foundation with local SQLite tickets, events, drafts, and admin audit logs.
+- Added disabled-by-default localhost-only Admin API with token gate and no LINE send endpoint.
+- Added handoff ticket creation for policy high-risk requests, KB-insufficient fallback, WebSearch final failure, and model hard fallback paths.
+- Refined policy gate so ordinary technical `replyToken` questions are not classified as secret-operation requests.
 - Added Sprint 4 local Knowledge Base / RAG MVP using Markdown/text files and SQLite FTS5.
 - Added KB import and unanswered-question listing scripts.
 - Added Output Validator for conservative fallback when project/technical KB evidence is missing.

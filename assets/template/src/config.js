@@ -35,6 +35,11 @@ const DEFAULTS = {
   knowledgeBaseMaxResults: 4,
   knowledgeBaseChunkChars: 900,
   knowledgeBaseInsufficientReply: "目前知識庫資料不足，我還不能確定答案。",
+  adminApiEnabled: false,
+  adminApiToken: "",
+  adminApiLocalhostOnly: true,
+  humanHandoffEnabled: true,
+  humanHandoffReplyText: "這件事需要人工確認，我已先記錄下來。",
   generalPendingReplyText: "思考中",
   generalDirectReplyEnabled: true,
   generalDirectReplyMaxInputChars: 800,
@@ -175,6 +180,20 @@ function readConfig() {
     knowledgeBaseInsufficientReply: readTextEnv(
       "KNOWLEDGE_BASE_INSUFFICIENT_REPLY",
       DEFAULTS.knowledgeBaseInsufficientReply
+    ),
+    adminApiEnabled: readBooleanEnv("ADMIN_API_ENABLED", DEFAULTS.adminApiEnabled),
+    adminApiToken: process.env.ADMIN_API_TOKEN || DEFAULTS.adminApiToken,
+    adminApiLocalhostOnly: readBooleanEnv(
+      "ADMIN_API_LOCALHOST_ONLY",
+      DEFAULTS.adminApiLocalhostOnly
+    ),
+    humanHandoffEnabled: readBooleanEnv(
+      "HUMAN_HANDOFF_ENABLED",
+      DEFAULTS.humanHandoffEnabled
+    ),
+    humanHandoffReplyText: readTextEnv(
+      "HUMAN_HANDOFF_REPLY_TEXT",
+      DEFAULTS.humanHandoffReplyText
     ),
     generalPendingReplyText: readTextEnv(
       "GENERAL_PENDING_REPLY_TEXT",

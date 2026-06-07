@@ -42,6 +42,12 @@ The current GitHub repository is `OmniProtection/line-bot-local-ai-gateway-skill
 - WebSearch SSRF / prompt-injection static safety checks。
 - production evidence gate path 修正。
 
+目前 template 也已整理 2026-06-07 Sprint 3 / Sprint 4 / Sprint 5 的開發更新：
+
+- Sprint 3 Gateway layer：Intent Router、Policy Gate、Context Builder、Token Budget。
+- Sprint 4 Knowledge Base / RAG MVP：local Markdown/text KB、SQLite FTS5、Output Validator、unanswered questions log。
+- Sprint 5 Handoff / Ticket / Admin API foundation：本地 handoff ticket、localhost-only token-gated Admin API、admin on-demand summary/draft。
+
 ## 這不是什麼
 
 本專案不會：
@@ -100,6 +106,9 @@ Free does not mean LINE Official Account features, LINE message quotas, hosting,
 - Sprint 3 Gateway layer：Intent Router、Policy Gate、Context Builder、Token Budget。
 - Gateway metadata：`input_style`、`risk_level`、`allowed_tools`、`route_reason`、`policy_reason`。
 - Sprint 4 local Knowledge Base / RAG MVP：Markdown/text KB import、SQLite FTS5 retrieval、Output Validator、unanswered questions log。
+- Sprint 5 Handoff / Ticket / Admin API foundation：policy high-risk、KB insufficient、WebSearch failure、model fallback path 建立本地 ticket。
+- Admin API 預設 disabled，啟用時仍是 localhost-only 且需要 `x-admin-api-token`。
+- Admin API 只能管理 local ticket、status、summary/draft，不提供 LINE send/push endpoint。
 - explicit WebSearch commands: `找:` / `搜:` / `查:`。
 - Auto WebSearch Router / SearchPlan v2 config-gated support。
 - WebSearch evidence-first response flow。
