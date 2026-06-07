@@ -1,5 +1,7 @@
 const express = require("express");
+const { createToolPlan, parseConfirmationCommand } = require("./agentLite");
 const { registerAdminRoutes } = require("./adminApi");
+const { createConfirmationStore } = require("./confirmationStore");
 const { readConfig, validateConfig } = require("./config");
 const { shouldUseDirectModelReply } = require("./directReplyGate");
 const { createGatewayStore } = require("./gatewayStore");
@@ -28,9 +30,11 @@ const {
   redactRawEvent: redactPipelineRawEvent
 } = require("./pipelineContract");
 const { decideIntentRoute } = require("./intentRouter");
+const { evaluateToolPermission } = require("./permissionGate");
 const { evaluatePolicy } = require("./policyGate");
 const { clampReply, shouldHandleEvent } = require("./replyPolicy");
 const { errorClass, logEvent } = require("./logger");
+const { createToolRegistry } = require("./toolRegistry");
 const { decideWebSearchRequest, getPushTarget, parseWebSearchCommand } = require("./webSearchCommand");
 const { searchWeb } = require("./webSearchService");
 
@@ -139,9 +143,15 @@ function createBotRuntime(deps = {}) {
     createHandoffStore(
       deps.memoryStore && !deps.handoffStorePath ? ":memory:" : deps.handoffStorePath
     );
+  const confirmationStore =
+    deps.confirmationStore ||
+    createConfirmationStore(
+      deps.memoryStore && !deps.confirmationStorePath ? ":memory:" : deps.confirmationStorePath
+    );
   const gatewayStore =
     deps.gatewayStore ||
     createGatewayStore(deps.memoryStore && !deps.gatewayStorePath ? ":memory:" : deps.gatewayStorePath);
+  const toolRegistry = deps.toolRegistry || createToolRegistry();
   const log = deps.logEvent || logEvent;
   const now = deps.now || (() => Date.now());
   const nowIso = () => new Date(now()).toISOString();
@@ -260,6 +270,7 @@ function createBotRuntime(deps = {}) {
   registerAdminRoutes(app, {
     config,
     handoffStore,
+    toolRegistry,
     askLocalModel: services.askLocalModel,
     recordLlmCall,
     nowIso
@@ -319,6 +330,164 @@ function createBotRuntime(deps = {}) {
       input_chars: String(modelInput || "").length
     });
     return result;
+  }
+
+  function getLineActorId(source = {}) {
+    return source.userId || source.groupId || source.roomId || "unknown";
+  }
+
+  function formatConfirmationRequest(confirmation) {
+    return clampReply(
+      [
+        `請確認是否執行：${confirmation.userVisibleSummary || confirmation.toolName}`,
+        `確認碼：${confirmation.code}`,
+        `回覆「確認 ${confirmation.code}」執行，或「取消 ${confirmation.code}」取消。`
+      ].join("\n"),
+      config.maxReplyChars
+    );
+  }
+
+  function formatConfirmationResult(result) {
+    if (result.status === "not_found") {
+      return "找不到這個確認碼。";
+    }
+    if (result.status === "expired") {
+      return "這個確認碼已過期，請重新建立。";
+    }
+    if (result.status === "cancelled") {
+      return result.ok ? "已取消。" : "這個確認碼已取消。";
+    }
+    if (result.status === "executed") {
+      return "這個確認碼已經執行過。";
+    }
+    return "確認碼無法使用。";
+  }
+
+  function executeConfirmedTool({ confirmation, scope, routeDecision, policyDecision, context, lineEventLogId }) {
+    if (confirmation.toolName !== "handoff_ticket_create") {
+      return { ok: false, reason: "unsupported_confirmed_tool" };
+    }
+
+    const tool = toolRegistry.getTool(confirmation.toolName);
+    const permission = evaluateToolPermission({
+      tool,
+      actor: { type: "line" },
+      routeDecision,
+      policyDecision,
+      payload: confirmation.payload,
+      confirmed: true
+    });
+    if (!permission.allowed) {
+      return { ok: false, reason: permission.reason };
+    }
+
+    const ticketResult = createHandoffTicket({
+      triggerType: "user_confirmed_tool",
+      triggerReason: confirmation.payload.triggerReason || "confirmed_handoff_ticket_create",
+      priority: "normal",
+      scope,
+      modelInput: confirmation.payload.questionText || "",
+      routeDecision,
+      policyDecision,
+      context,
+      lineEventLogId,
+      dedupeSuffix: confirmation.code
+    });
+
+    return {
+      ok: Boolean(ticketResult?.ticket),
+      reason: ticketResult?.ticket ? "ticket_created" : "ticket_create_failed",
+      ticket: ticketResult?.ticket || null
+    };
+  }
+
+  async function handleConfirmationCommand(command, scope, event, context, routeDecision, policyDecision, lineEventLogId) {
+    const result = confirmationStore.resolveConfirmation({
+      code: command.code,
+      conversationKey: scope.key,
+      actorId: getLineActorId(event.source),
+      action: command.action,
+      now: nowIso()
+    });
+
+    if (!result.ok || command.action === "cancel") {
+      await sendReply(event.replyToken, formatConfirmationResult(result), {
+        ...context,
+        fallback_used: false,
+        fallback_reason: result.reason
+      });
+      return;
+    }
+
+    const execution = executeConfirmedTool({
+      confirmation: result.confirmation,
+      scope,
+      routeDecision,
+      policyDecision,
+      context,
+      lineEventLogId
+    });
+
+    await sendReply(
+      event.replyToken,
+      execution.ok && execution.ticket
+        ? `已建立本機工單：${execution.ticket.ticketId}`
+        : `無法執行：${execution.reason}`,
+      {
+        ...context,
+        fallback_used: !execution.ok,
+        fallback_reason: execution.reason
+      }
+    );
+  }
+
+  async function handleAgentLiteToolPlan(plan, scope, event, context, routeDecision, policyDecision) {
+    const tool = toolRegistry.getTool(plan.tool_name);
+    const permission = evaluateToolPermission({
+      tool,
+      actor: { type: "line" },
+      routeDecision,
+      policyDecision,
+      payload: {
+        text: plan.arguments?.questionText || "",
+        ...plan.arguments
+      },
+      confirmed: false
+    });
+
+    if (permission.requires_confirmation) {
+      const confirmation = confirmationStore.createPendingConfirmation({
+        toolName: plan.tool_name,
+        actorType: "line",
+        actorId: getLineActorId(event.source),
+        scopeType: scope.type,
+        conversationKey: scope.key,
+        payload: plan.arguments,
+        userVisibleSummary: plan.user_visible_summary,
+        createdAt: nowIso()
+      });
+      await sendReply(event.replyToken, formatConfirmationRequest(confirmation), {
+        ...context,
+        fallback_used: false,
+        fallback_reason: "tool_confirmation_required"
+      });
+      return;
+    }
+
+    if (!permission.allowed) {
+      await sendReply(event.replyToken, "這個工具目前不能執行。", {
+        ...context,
+        fallback_used: true,
+        fallback_reason: permission.reason
+      });
+      return;
+    }
+
+    await sendReply(event.replyToken, "這個工具目前不支援直接執行。", {
+      ...context,
+      fallback_used: true,
+      fallback_reason: "direct_tool_execution_not_supported"
+    });
   }
 
   function validateGeneralReply({
@@ -1994,6 +2163,30 @@ function createBotRuntime(deps = {}) {
       log("one_on_one_message_handled", context);
     }
 
+    const confirmationCommand = parseConfirmationCommand(modelInput);
+    if (confirmationCommand) {
+      const { routeDecision, policyDecision } = decideRoutePolicy({ modelInput });
+      recordRoute(
+        "tool_confirmation",
+        "reply",
+        modelInput,
+        "completed",
+        null,
+        routeDecision,
+        policyDecision
+      );
+      await handleConfirmationCommand(
+        confirmationCommand,
+        scope,
+        event,
+        context,
+        routeDecision,
+        policyDecision,
+        saveResult.id
+      );
+      return;
+    }
+
     const memoryCommand = parseMemoryCommand(modelInput);
     if (memoryCommand) {
       const { routeDecision, policyDecision } = decideRoutePolicy({ modelInput, memoryCommand });
@@ -2007,6 +2200,22 @@ function createBotRuntime(deps = {}) {
         policyDecision
       );
       await handleMemoryCommand(memoryCommand, scope, event, context);
+      return;
+    }
+
+    const toolPlan = createToolPlan({ modelInput, registry: toolRegistry });
+    if (toolPlan?.ok === true) {
+      const { routeDecision, policyDecision } = decideRoutePolicy({ modelInput });
+      recordRoute(
+        "agent_lite_tool_plan",
+        "reply",
+        modelInput,
+        "completed",
+        "tool_confirmation_required",
+        routeDecision,
+        policyDecision
+      );
+      await handleAgentLiteToolPlan(toolPlan, scope, event, context, routeDecision, policyDecision);
       return;
     }
 
@@ -2151,6 +2360,9 @@ function createBotRuntime(deps = {}) {
     if (typeof handoffStore.close === "function") {
       handoffStore.close();
     }
+    if (typeof confirmationStore.close === "function") {
+      confirmationStore.close();
+    }
     return { closed: true };
   }
 
@@ -2165,6 +2377,8 @@ function createBotRuntime(deps = {}) {
     drainDurableJobs: () => drainDurableJobs(),
     gatewayStore,
     handoffStore,
+    confirmationStore,
+    toolRegistry,
     handleEvent,
     runWebSearchJob
   };

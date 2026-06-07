@@ -1,5 +1,7 @@
 const express = require("express");
+const { evaluateToolPermission } = require("./permissionGate");
 const { errorClass } = require("./logger");
+const { createToolRegistry } = require("./toolRegistry");
 
 function normalizeRemoteAddress(value) {
   return String(value || "")
@@ -51,6 +53,7 @@ function formatError(error) {
 function registerAdminRoutes(app, deps = {}) {
   const config = deps.config || {};
   const handoffStore = deps.handoffStore;
+  const toolRegistry = deps.toolRegistry || createToolRegistry();
   const askLocalModel = deps.askLocalModel;
   const recordLlmCall = deps.recordLlmCall || (() => {});
   const nowIso = deps.nowIso || (() => new Date().toISOString());
@@ -96,6 +99,14 @@ function registerAdminRoutes(app, deps = {}) {
   });
 
   router.get("/tickets", (req, res) => {
+    const permission = evaluateToolPermission({
+      tool: toolRegistry?.getTool?.("admin_ticket_list"),
+      actor: { type: "admin" },
+      payload: {}
+    });
+    if (!permission.allowed) {
+      return res.status(403).json({ ok: false, error: permission.reason });
+    }
     const tickets = handoffStore.listTickets({
       status: req.query.status,
       triggerType: req.query.trigger_type || req.query.triggerType,
@@ -136,6 +147,14 @@ function registerAdminRoutes(app, deps = {}) {
   });
 
   router.get("/tickets/:ticketId", (req, res) => {
+    const permission = evaluateToolPermission({
+      tool: toolRegistry?.getTool?.("admin_ticket_get"),
+      actor: { type: "admin" },
+      payload: { ticketId: req.params.ticketId }
+    });
+    if (!permission.allowed) {
+      return res.status(403).json({ ok: false, error: permission.reason });
+    }
     const ticket = handoffStore.getTicket(req.params.ticketId);
     if (!ticket) {
       return res.status(404).json({ ok: false, error: "ticket_not_found" });
