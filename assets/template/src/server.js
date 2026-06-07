@@ -1,4 +1,5 @@
 const express = require("express");
+const { registerAdminRoutes } = require("./adminApi");
 const { readConfig, validateConfig } = require("./config");
 const { shouldUseDirectModelReply } = require("./directReplyGate");
 const { createGatewayStore } = require("./gatewayStore");
@@ -16,6 +17,7 @@ const {
   summarizeRollingConversationBatch
 } = require("./lmStudioClient");
 const { buildContextPackage } = require("./contextBuilder");
+const { createHandoffStore } = require("./handoffStore");
 const { createKnowledgeBaseStore } = require("./knowledgeBaseStore");
 const { createMemoryStore, sanitizeMemoryText } = require("./memoryStore");
 const { validateModelOutput } = require("./outputValidator");
@@ -132,6 +134,11 @@ function createBotRuntime(deps = {}) {
     createKnowledgeBaseStore(
       deps.memoryStore && !deps.knowledgeBaseStorePath ? ":memory:" : deps.knowledgeBaseStorePath
     );
+  const handoffStore =
+    deps.handoffStore ||
+    createHandoffStore(
+      deps.memoryStore && !deps.handoffStorePath ? ":memory:" : deps.handoffStorePath
+    );
   const gatewayStore =
     deps.gatewayStore ||
     createGatewayStore(deps.memoryStore && !deps.gatewayStorePath ? ":memory:" : deps.gatewayStorePath);
@@ -217,7 +224,8 @@ function createBotRuntime(deps = {}) {
     modelInput = "",
     modelResult = null,
     durationMs = null,
-    evidenceCount = 0
+    evidenceCount = 0,
+    handoffTriggered = false
   }) {
     gatewayStore.recordLlmCall({
       requestId: context.request_id,
@@ -236,7 +244,7 @@ function createBotRuntime(deps = {}) {
       fallbackUsed: modelResult?.fallbackUsed === true || modelResult?.ok === false,
       fallbackReason: modelResult?.reason || null,
       knowledgeHit: evidenceCount > 0,
-      handoffTriggered: false,
+      handoffTriggered: handoffTriggered === true || modelResult?.handoffTriggered === true,
       status:
         modelResult?.fallbackUsed === true || modelResult?.ok === false
           ? modelResult?.reason || "fallback"
@@ -247,6 +255,70 @@ function createBotRuntime(deps = {}) {
 
   function getKnowledgeEvidence(memoryContext) {
     return Array.isArray(memoryContext?.knowledgeContext) ? memoryContext.knowledgeContext : [];
+  }
+
+  registerAdminRoutes(app, {
+    config,
+    handoffStore,
+    askLocalModel: services.askLocalModel,
+    recordLlmCall,
+    nowIso
+  });
+
+  function createHandoffTicket({
+    triggerType,
+    triggerReason,
+    priority = "normal",
+    scope = null,
+    modelInput = "",
+    routeDecision = null,
+    policyDecision = null,
+    context = {},
+    lineEventLogId = null,
+    dedupeSuffix = ""
+  } = {}) {
+    if (config.humanHandoffEnabled !== true) {
+      return null;
+    }
+
+    const result = handoffStore.createTicket({
+      triggerType,
+      triggerReason,
+      priority,
+      scopeType: scope?.type || null,
+      conversationKey: scope?.key || null,
+      questionText: modelInput,
+      inputChars: String(modelInput || "").length,
+      routeIntent: routeDecision?.intent || context.intent || "unknown",
+      inputStyle: routeDecision?.input_style || "unknown",
+      riskLevel: policyDecision?.risk_level || context.risk_level || "unknown",
+      contextSnapshot: {
+        request_id: context.request_id || null,
+        webhook_event_id: context.webhook_event_id || null,
+        event_index: context.event_index ?? null,
+        source_type: context.source_type || null,
+        line_event_log_id: lineEventLogId || null
+      },
+      dedupeKey: [
+        triggerType || "handoff",
+        scope?.key || "unknown",
+        context.webhook_event_id || context.request_id || "unknown",
+        dedupeSuffix || String(modelInput || "").length
+      ].join(":"),
+      actor: "system",
+      createdAt: nowIso()
+    });
+    log("handoff_ticket_created", {
+      request_id: context.request_id || null,
+      webhook_event_id: context.webhook_event_id || null,
+      ticket_id: result.ticket?.ticketId || null,
+      inserted: result.inserted === true,
+      duplicate: result.duplicate === true,
+      trigger_type: triggerType,
+      trigger_reason: triggerReason,
+      input_chars: String(modelInput || "").length
+    });
+    return result;
   }
 
   function validateGeneralReply({
@@ -306,6 +378,22 @@ function createBotRuntime(deps = {}) {
         createdAt: nowIso()
       });
     }
+    let handoffTriggered = false;
+    if (validation.fallbackUsed) {
+      const ticketResult = createHandoffTicket({
+        triggerType: "kb_insufficient",
+        triggerReason: validation.reason,
+        priority: "normal",
+        scope,
+        modelInput,
+        routeDecision,
+        policyDecision,
+        context,
+        lineEventLogId: context.line_event_log_id || null,
+        dedupeSuffix: validation.reason
+      });
+      handoffTriggered = Boolean(ticketResult?.ticket);
+    }
 
     return {
       ...modelResult,
@@ -314,7 +402,8 @@ function createBotRuntime(deps = {}) {
       reason: validation.fallbackUsed ? validation.reason : modelResult?.reason || validation.reason,
       validatorStatus: validation.ok ? "pass" : "fallback",
       validatorReason: validation.reason,
-      knowledgeEvidenceCount: validation.evidenceCount
+      knowledgeEvidenceCount: validation.evidenceCount,
+      handoffTriggered
     };
   }
 
@@ -985,7 +1074,19 @@ function createBotRuntime(deps = {}) {
     return now() + Math.min(Math.max(1, configured), 59000);
   }
 
-  async function replySearchFailure(replyToken, context, reason) {
+  async function replySearchFailure(replyToken, context, reason, handoffOptions = {}) {
+    createHandoffTicket({
+      triggerType: "web_search_failure",
+      triggerReason: reason || "web_search_failed",
+      priority: "normal",
+      scope: handoffOptions.scope || null,
+      modelInput: handoffOptions.modelInput || "",
+      routeDecision: handoffOptions.routeDecision || null,
+      policyDecision: handoffOptions.policyDecision || null,
+      context,
+      lineEventLogId: handoffOptions.lineEventLogId || null,
+      dedupeSuffix: reason || "web_search_failed"
+    });
     return sendReply(replyToken, WEB_SEARCH_FAILURE_REPLY, {
       ...context,
       fallback_used: true,
@@ -1018,6 +1119,7 @@ function createBotRuntime(deps = {}) {
       webhook_event_id: job.webhookEventId || null,
       event_index: job.eventIndex,
       source_type: job.sourceType,
+      line_event_log_id: job.lineEventLogId || null,
       intent: "web_search_request",
       risk_level: "unknown",
       query_chars: String(job.query || "").length,
@@ -1025,12 +1127,19 @@ function createBotRuntime(deps = {}) {
       source_preference: job.sourcePreference || "general",
       forced_search: job.forcedSearch === true
     };
+    const handoffFailureOptions = {
+      scope: job.scope,
+      modelInput: originalQuestion,
+      routeDecision: job.routeDecision || null,
+      policyDecision: job.policyDecision || null,
+      lineEventLogId: job.lineEventLogId || null
+    };
 
     log("web_search_reply_started", context);
 
     try {
       if (getRemainingJobMs(deadlineMs) <= 0) {
-        await replySearchFailure(job.replyToken, context, "timeout");
+        await replySearchFailure(job.replyToken, context, "timeout", handoffFailureOptions);
         return { ok: false, reason: "timeout" };
       }
 
@@ -1041,13 +1150,18 @@ function createBotRuntime(deps = {}) {
         sourcePreference
       });
       if (!searchResult.ok) {
-        await replySearchFailure(job.replyToken, context, searchResult.reason || "search_failed");
+        await replySearchFailure(
+          job.replyToken,
+          context,
+          searchResult.reason || "search_failed",
+          handoffFailureOptions
+        );
         return { ok: false, reason: searchResult.reason || "search_failed" };
       }
 
       const remainingForModelMs = getRemainingJobMs(deadlineMs);
       if (remainingForModelMs <= 0) {
-        await replySearchFailure(job.replyToken, context, "timeout");
+        await replySearchFailure(job.replyToken, context, "timeout", handoffFailureOptions);
         return { ok: false, reason: "timeout" };
       }
 
@@ -1080,7 +1194,12 @@ function createBotRuntime(deps = {}) {
           modelResult.reason
         )
       ) {
-        await replySearchFailure(job.replyToken, context, modelResult.reason || "search_answer_failed");
+        await replySearchFailure(
+          job.replyToken,
+          context,
+          modelResult.reason || "search_answer_failed",
+          handoffFailureOptions
+        );
         return { ok: false, reason: modelResult.reason || "search_answer_failed" };
       }
 
@@ -1120,7 +1239,7 @@ function createBotRuntime(deps = {}) {
         duration_ms: now() - startedAt
       });
       try {
-        await replySearchFailure(job.replyToken, context, reason);
+        await replySearchFailure(job.replyToken, context, reason, handoffFailureOptions);
       } catch (replyError) {
         log("web_search_reply_failure_reply_failed", {
           ...context,
@@ -1158,6 +1277,7 @@ function createBotRuntime(deps = {}) {
       request_id: job.requestId,
       event_index: job.eventIndex,
       source_type: job.sourceType,
+      line_event_log_id: job.lineEventLogId || null,
       intent: routeDecision.intent,
       risk_level: policyDecision.risk_level,
       input_chars: job.modelInput.length
@@ -1198,6 +1318,24 @@ function createBotRuntime(deps = {}) {
         durableJob,
         scope: job.scope
       });
+      if (modelResult.fallbackUsed && modelResult.validatorStatus !== "fallback") {
+        createHandoffTicket({
+          triggerType: "model_failure",
+          triggerReason: modelResult.reason || "general_reply_fallback",
+          priority: "normal",
+          scope: job.scope,
+          modelInput: job.modelInput,
+          routeDecision,
+          policyDecision,
+          context,
+          lineEventLogId: job.lineEventLogId,
+          dedupeSuffix: modelResult.reason || "general_reply_fallback"
+        });
+        modelResult = {
+          ...modelResult,
+          handoffTriggered: true
+        };
+      }
       recordLlmCall({
         callType: "general_reply",
         context,
@@ -1232,6 +1370,18 @@ function createBotRuntime(deps = {}) {
       });
     } catch (error) {
       const reason = errorClass(error);
+      createHandoffTicket({
+        triggerType: "model_failure",
+        triggerReason: reason,
+        priority: "normal",
+        scope: job.scope,
+        modelInput: job.modelInput,
+        routeDecision,
+        policyDecision,
+        context,
+        lineEventLogId: job.lineEventLogId,
+        dedupeSuffix: reason
+      });
       if (llmAttempted && !llmLogged) {
         recordLlmCall({
           callType: "general_reply",
@@ -1298,11 +1448,14 @@ function createBotRuntime(deps = {}) {
       sourceType: context.source_type,
       replyToken: event.replyToken,
       lineEventLogId: memoryOptions.lineEventLogId,
+      scope: memoryOptions.scope || null,
       query: decision.query,
       originalQuestion: decision.query,
       searchQuery: searchPlan?.ok === true ? getPlannedSearchQuery(decision.query, searchPlan) : decision.query,
       sourcePreference: searchPlan?.ok === true ? getSearchSourcePreference(searchPlan) : "general",
       forcedSearch: memoryOptions.forcedSearch === true,
+      routeDecision: memoryOptions.routeDecision || null,
+      policyDecision: memoryOptions.policyDecision || null,
       deadlineMs: replyDeadlineMs,
       createdAt: new Date(now()).toISOString(),
       createdAtMs: now()
@@ -1466,6 +1619,7 @@ function createBotRuntime(deps = {}) {
   }
 
   async function handleGeneralConversation(modelInput, scope, event, context, memoryOptions = {}) {
+    context.line_event_log_id = memoryOptions.lineEventLogId || null;
     const pushTarget = getPushTarget(event.source);
     const routeDecision =
       memoryOptions.routeDecision ||
@@ -1862,6 +2016,7 @@ function createBotRuntime(deps = {}) {
       recordRoute("web_search", "reply", modelInput, "completed", null, routeDecision, policyDecision);
       await handleWebSearchCommand(searchCommand, event, context, {
         lineEventLogId: saveResult.id,
+        scope,
         forcedSearch: true,
         routeDecision,
         policyDecision
@@ -1889,11 +2044,14 @@ function createBotRuntime(deps = {}) {
         sourceType: context.source_type,
         replyToken: event.replyToken,
         lineEventLogId: saveResult.id,
+        scope,
         query: modelInput,
         originalQuestion: modelInput,
         searchQuery: getPlannedSearchQuery(modelInput, searchDecision),
         sourcePreference: getSearchSourcePreference(searchDecision),
         forcedSearch: false,
+        routeDecision,
+        policyDecision,
         deadlineMs: replySearchDeadlineMs,
         createdAt: new Date(now()).toISOString(),
         createdAtMs: now()
@@ -1905,6 +2063,35 @@ function createBotRuntime(deps = {}) {
       modelInput,
       searchPlan: searchDecision
     });
+    if (policyDecision.policy_reason === "external_state_mutation_not_allowed") {
+      recordRoute(
+        "general_chat",
+        "reply",
+        modelInput,
+        "completed",
+        "human_handoff_required",
+        routeDecision,
+        policyDecision
+      );
+      createHandoffTicket({
+        triggerType: "policy_high_risk",
+        triggerReason: policyDecision.policy_reason,
+        priority: "high",
+        scope,
+        modelInput,
+        routeDecision,
+        policyDecision,
+        context,
+        lineEventLogId: saveResult.id,
+        dedupeSuffix: policyDecision.policy_reason
+      });
+      await sendReply(event.replyToken, config.humanHandoffReplyText, {
+        ...context,
+        fallback_used: true,
+        fallback_reason: "human_handoff_required"
+      });
+      return;
+    }
     recordRoute(
       "general_chat",
       "reply_or_push",
@@ -1961,6 +2148,9 @@ function createBotRuntime(deps = {}) {
     if (typeof knowledgeBaseStore.close === "function") {
       knowledgeBaseStore.close();
     }
+    if (typeof handoffStore.close === "function") {
+      handoffStore.close();
+    }
     return { closed: true };
   }
 
@@ -1974,6 +2164,7 @@ function createBotRuntime(deps = {}) {
     drainWebSearchQueue: () => webSearchQueue,
     drainDurableJobs: () => drainDurableJobs(),
     gatewayStore,
+    handoffStore,
     handleEvent,
     runWebSearchJob
   };

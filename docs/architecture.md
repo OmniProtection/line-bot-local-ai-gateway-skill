@@ -30,6 +30,8 @@ The webhook server is the only component intended to receive public LINE webhook
 - Gateway metadata records routing and policy decisions without storing raw user text.
 - Local Knowledge Base uses Markdown/text files imported into SQLite FTS5. It does not use embeddings or a vector DB.
 - KB evidence is separate from LINE chat memory and should be treated as project-local technical knowledge.
+- Handoff tickets are local SQLite operational records for policy, validator, search, model, or admin-created follow-up cases.
+- Admin API is disabled by default, localhost-only by default, token-gated when enabled, and has no LINE send endpoint.
 
 ## Sprint 3 Gateway Layer
 
@@ -50,6 +52,20 @@ Sprint 4 adds a local KB/RAG layer for project and technical answers:
 - `list-unanswered-questions.js`: lists unresolved questions for future KB improvements.
 
 The KB layer is local-first. It does not deploy, call external services, use embeddings, or introduce a vector database.
+
+## Sprint 5 Handoff / Ticket / Admin API
+
+Sprint 5 adds a local human handoff foundation without changing outbound LINE delivery rules:
+
+- `handoffStore.js`: stores local handoff tickets, ticket events, ticket drafts, and admin audit logs in SQLite.
+- `adminApi.js`: exposes disabled-by-default localhost-only admin routes behind `x-admin-api-token`.
+- Policy high-risk requests create `policy_high_risk` tickets and receive the configured conservative handoff reply.
+- KB-insufficient validator fallbacks create `kb_insufficient` tickets while preserving unanswered-question logging.
+- WebSearch final failures preserve the Reply API `搜尋失敗` response and create `web_search_failure` tickets.
+- Model hard fallbacks create `model_failure` tickets.
+- Admin summary and draft generation are on-demand admin operations only; they do not run inside the webhook path.
+
+The Admin API intentionally has no route that sends, pushes, broadcasts, multicasts, or narrowcasts LINE messages.
 
 ## Manual External Steps
 

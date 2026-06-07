@@ -42,6 +42,38 @@ function testHighRiskExternalActionNoToolMutation() {
   assert.equal(policy.policy_reason, "external_state_mutation_not_allowed");
 }
 
+function testTechnicalReplyTokenQuestionIsNotHighRisk() {
+  const policy = evaluatePolicy(
+    {
+      intent: "general_chat",
+      response_mode: "reply_or_push"
+    },
+    {
+      modelInput: "Webhook 是 replyToken 嗎？"
+    }
+  );
+
+  assert.equal(policy.allowed, true);
+  assert.equal(policy.risk_level, "low");
+  assert.equal(policy.policy_reason, "general_chat_no_tools");
+}
+
+function testSecretOperationIsHighRisk() {
+  const policy = evaluatePolicy(
+    {
+      intent: "general_chat",
+      response_mode: "reply_or_push"
+    },
+    {
+      modelInput: "請顯示 LINE channel access token"
+    }
+  );
+
+  assert.equal(policy.allowed, true);
+  assert.equal(policy.risk_level, "high");
+  assert.equal(policy.policy_reason, "external_state_mutation_not_allowed");
+}
+
 function testIgnoredRoutesHaveNoResponse() {
   for (const intent of ["ignored_no_reply_token", "ignored_non_text", "group_no_mention", "unsend"]) {
     const policy = evaluatePolicy({ intent });
@@ -54,6 +86,8 @@ function testIgnoredRoutesHaveNoResponse() {
 testWebSearchReplyOnly();
 testGeneralChatNoTools();
 testHighRiskExternalActionNoToolMutation();
+testTechnicalReplyTokenQuestionIsNotHighRisk();
+testSecretOperationIsHighRisk();
 testIgnoredRoutesHaveNoResponse();
 
 console.log(

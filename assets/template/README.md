@@ -34,6 +34,14 @@ Sprint 4 adds a local Knowledge Base / RAG MVP:
 - `npm run kb:unanswered` lists unresolved project/technical questions for future KB updates.
 - No embeddings, vector DB, deployment, or external KB service is used.
 
+Sprint 5 adds a local Handoff / Ticket / Admin API foundation:
+
+- High-risk policy requests, KB-insufficient fallbacks, WebSearch final failures, and model hard fallbacks can create local handoff tickets.
+- `handoffStore.js` stores tickets, ticket events, drafts, and admin audit logs in local SQLite.
+- Admin API is disabled by default, localhost-only by default, and requires `x-admin-api-token` when enabled.
+- Admin summary / draft generation is admin on-demand only and is not part of the webhook path.
+- Admin API has no endpoint that sends LINE messages.
+
 Remote LLM endpoints are unsafe by default. Changing `LOCAL_MODEL_BASE_URL` away from `localhost` or `127.0.0.1` can send LINE message content, memory context, or search evidence away from the operator machine and requires explicit manual approval.
 
 ## Defaults
@@ -61,6 +69,10 @@ Remote LLM endpoints are unsafe by default. Changing `LOCAL_MODEL_BASE_URL` away
 - Knowledge Base source directory: `kb`
 - Knowledge Base max results: `4`
 - Knowledge Base chunk chars: `900`
+- Admin API: disabled by default
+- Admin API localhost-only: enabled by default
+- Human handoff ticketing: enabled by default
+- Human handoff reply text: `這件事需要人工確認，我已先記錄下來。`
 - LM Studio `npacker/web-tools` search path: disabled by default
 - DuckDuckGo fallback: disabled by default
 - Server port: `3000`
@@ -139,6 +151,11 @@ KNOWLEDGE_BASE_SOURCE_DIR=kb
 KNOWLEDGE_BASE_MAX_RESULTS=4
 KNOWLEDGE_BASE_CHUNK_CHARS=900
 KNOWLEDGE_BASE_INSUFFICIENT_REPLY=目前知識庫資料不足，我還不能確定答案。
+ADMIN_API_ENABLED=false
+ADMIN_API_TOKEN=
+ADMIN_API_LOCALHOST_ONLY=true
+HUMAN_HANDOFF_ENABLED=true
+HUMAN_HANDOFF_REPLY_TEXT=這件事需要人工確認，我已先記錄下來。
 PORT=3000
 ```
 
@@ -154,6 +171,15 @@ higher.
 
 - `GET /health`: local health check.
 - `POST /webhook`: LINE webhook endpoint with SDK middleware signature verification.
+- `GET /admin/health`: disabled by default; when enabled, localhost-only and token-gated.
+- `GET /admin/tickets`: list local handoff tickets; disabled by default.
+- `POST /admin/tickets`: create a local manual ticket; disabled by default.
+- `GET /admin/tickets/:ticketId`: read one local ticket; disabled by default.
+- `PATCH /admin/tickets/:ticketId/status`: update local ticket status; disabled by default.
+- `POST /admin/tickets/:ticketId/summary`: generate local admin summary draft; disabled by default.
+- `POST /admin/tickets/:ticketId/draft-reply`: generate local admin reply draft; disabled by default.
+
+There is intentionally no `/admin/.../send` endpoint.
 
 ## Verification
 
@@ -198,9 +224,20 @@ Knowledge Base manual checks:
 - `npm run kb:unanswered` should list unresolved fallback questions.
 - KB evidence must stay separate from manual memories and LINE chat history.
 
+Handoff / Admin API checks:
+
+- `ADMIN_API_ENABLED=false` should make `/admin/health` return `admin_api_disabled`.
+- When Admin API is enabled locally, requests must include `x-admin-api-token`.
+- Unknown or non-local remote addresses must not be treated as localhost when `ADMIN_API_LOCALHOST_ONLY=true`.
+- High-risk external action requests should create a `policy_high_risk` ticket and reply with `HUMAN_HANDOFF_REPLY_TEXT`.
+- Project/technical KB-insufficient answers should create a `kb_insufficient` ticket.
+- WebSearch final failures should preserve `搜尋失敗` and create a `web_search_failure` ticket.
+- Casual chat should not create tickets.
+- Admin audit logs must not store admin token values.
+
 ## Limits
 
-This MVP does not create a LINE Official Account, retrieve credentials, configure LINE Developers Console, install tunnel tools, deploy hosting, add embeddings, create a vector DB, or guarantee model quality.
+This MVP does not create a LINE Official Account, retrieve credentials, configure LINE Developers Console, install tunnel tools, deploy hosting, add embeddings, create a vector DB, send LINE messages from Admin API, or guarantee model quality.
 
 ## Related Safety Docs
 
