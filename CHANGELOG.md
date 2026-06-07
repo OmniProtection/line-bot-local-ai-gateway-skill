@@ -4,6 +4,10 @@ All notable changes to this project will be documented here.
 
 ## Unreleased
 
+- Added Sprint 4 local Knowledge Base / RAG MVP using Markdown/text files and SQLite FTS5.
+- Added KB import and unanswered-question listing scripts.
+- Added Output Validator for conservative fallback when project/technical KB evidence is missing.
+- Added starter KB document for LINE Bot project operations.
 - Added Sprint 3 Gateway layer for the template: Intent Router, Policy Gate, Context Builder, and Token Budget.
 - Added route/policy metadata to pipeline records: `input_style`, `risk_level`, `allowed_tools`, `route_reason`, and `policy_reason`.
 - Added Sprint 3 static/unit smoke tests for routing, policy, context building, token budgeting, and operation flow.

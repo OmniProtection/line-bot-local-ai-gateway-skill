@@ -11,7 +11,7 @@ LINE Platform
   -> Intent Router
   -> Policy Gate
   -> Context Builder / Token Budget
-  -> memory/search/model routing
+  -> memory / local KB / search / model routing
   -> local LM Studio endpoint when needed
   -> LINE Reply API or approved Push API
 ```
@@ -28,6 +28,8 @@ The webhook server is the only component intended to receive public LINE webhook
 - Auto WebSearch routing is config-gated and must pass SearchPlan / confidence / safety rules.
 - WebSearch answers use LINE Reply API only in the runtime path; Push must not be used to supplement search answers.
 - Gateway metadata records routing and policy decisions without storing raw user text.
+- Local Knowledge Base uses Markdown/text files imported into SQLite FTS5. It does not use embeddings or a vector DB.
+- KB evidence is separate from LINE chat memory and should be treated as project-local technical knowledge.
 
 ## Sprint 3 Gateway Layer
 
@@ -37,6 +39,17 @@ Sprint 3 adds a maintainable gateway layer between LINE events, memory, WebSearc
 - `policyGate.js`: assigns allowed tools and risk level. It does not execute deployment, package installation, broadcast, multicast, narrowcast, or external-state mutations.
 - `contextBuilder.js`: centralizes memory/context loading and adds search-status guards when WebSearch was not performed.
 - `tokenBudget.js`: applies a char-based context budget without installing a tokenizer.
+
+## Sprint 4 Knowledge Base / RAG MVP
+
+Sprint 4 adds a local KB/RAG layer for project and technical answers:
+
+- `knowledgeBaseStore.js`: stores KB documents/chunks and `unanswered_questions` in local SQLite.
+- `import-knowledge-base.js`: imports Markdown/text files from `kb/`.
+- `outputValidator.js`: blocks unsupported KB claims and returns a conservative fallback when required evidence is missing.
+- `list-unanswered-questions.js`: lists unresolved questions for future KB improvements.
+
+The KB layer is local-first. It does not deploy, call external services, use embeddings, or introduce a vector database.
 
 ## Manual External Steps
 

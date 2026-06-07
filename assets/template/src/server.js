@@ -16,7 +16,9 @@ const {
   summarizeRollingConversationBatch
 } = require("./lmStudioClient");
 const { buildContextPackage } = require("./contextBuilder");
+const { createKnowledgeBaseStore } = require("./knowledgeBaseStore");
 const { createMemoryStore, sanitizeMemoryText } = require("./memoryStore");
+const { validateModelOutput } = require("./outputValidator");
 const {
   buildPipelineRequest,
   isBotMentioned,
@@ -125,6 +127,11 @@ function createBotRuntime(deps = {}) {
   const app = deps.app || express();
   const lineClient = deps.lineClient || createLineClient(config);
   const memoryStore = deps.memoryStore || createMemoryStore();
+  const knowledgeBaseStore =
+    deps.knowledgeBaseStore ||
+    createKnowledgeBaseStore(
+      deps.memoryStore && !deps.knowledgeBaseStorePath ? ":memory:" : deps.knowledgeBaseStorePath
+    );
   const gatewayStore =
     deps.gatewayStore ||
     createGatewayStore(deps.memoryStore && !deps.gatewayStorePath ? ":memory:" : deps.gatewayStorePath);
@@ -236,6 +243,79 @@ function createBotRuntime(deps = {}) {
           : "success",
       createdAt: nowIso()
     });
+  }
+
+  function getKnowledgeEvidence(memoryContext) {
+    return Array.isArray(memoryContext?.knowledgeContext) ? memoryContext.knowledgeContext : [];
+  }
+
+  function validateGeneralReply({
+    modelInput,
+    modelResult,
+    memoryContext,
+    routeDecision,
+    policyDecision,
+    context,
+    durableJob = null,
+    scope = null
+  }) {
+    const knowledgeEvidence = getKnowledgeEvidence(memoryContext);
+    const validation = validateModelOutput({
+      modelInput,
+      modelOutput: modelResult?.text || "",
+      knowledgeEvidence,
+      routeDecision,
+      policyDecision,
+      config
+    });
+
+    recordPipeline(
+      {
+        request_id: context.request_id,
+        source: { type: context.source_type || null },
+        intent: routeDecision?.intent || context.intent || "unknown",
+        risk_level: policyDecision?.risk_level || context.risk_level || "unknown",
+        message: { text_chars: String(modelInput || "").length },
+        route: "output_validator"
+      },
+      {
+        jobId: durableJob?.id || null,
+        jobType: durableJob?.jobType || null,
+        stage: "output_validator",
+        status: validation.ok ? "completed" : "failed",
+        fallbackReason: validation.fallbackUsed ? validation.reason : null,
+        outputChars: validation.text.length,
+        evidenceCount: validation.evidenceCount
+      }
+    );
+
+    if (
+      validation.fallbackUsed &&
+      knowledgeBaseStore &&
+      typeof knowledgeBaseStore.recordUnansweredQuestion === "function"
+    ) {
+      knowledgeBaseStore.recordUnansweredQuestion({
+        scopeType: scope?.type || null,
+        conversationKey: scope?.key || null,
+        questionText: modelInput,
+        inputChars: String(modelInput || "").length,
+        routeIntent: routeDecision?.intent || "unknown",
+        inputStyle: routeDecision?.input_style || "unknown",
+        knowledgeHit: validation.evidenceCount > 0,
+        validatorReason: validation.reason,
+        createdAt: nowIso()
+      });
+    }
+
+    return {
+      ...modelResult,
+      text: validation.text,
+      fallbackUsed: modelResult?.fallbackUsed === true || validation.fallbackUsed === true,
+      reason: validation.fallbackUsed ? validation.reason : modelResult?.reason || validation.reason,
+      validatorStatus: validation.ok ? "pass" : "fallback",
+      validatorReason: validation.reason,
+      knowledgeEvidenceCount: validation.evidenceCount
+    };
   }
 
   function buildRequestFor(
@@ -1094,6 +1174,7 @@ function createBotRuntime(deps = {}) {
         lineEventLogId: job.lineEventLogId,
         includeGroupMentionContext: job.includeGroupMentionContext === true,
         memoryStore,
+        knowledgeBaseStore,
         config
       });
       const memoryContext = contextPackage.memory_context;
@@ -1106,14 +1187,25 @@ function createBotRuntime(deps = {}) {
         section_counts: contextPackage.context_stats?.section_counts || {}
       });
       llmAttempted = true;
-      const modelResult = await services.askLocalModel(job.modelInput, config, memoryContext);
+      let modelResult = await services.askLocalModel(job.modelInput, config, memoryContext);
+      modelResult = validateGeneralReply({
+        modelInput: job.modelInput,
+        modelResult,
+        memoryContext,
+        routeDecision,
+        policyDecision,
+        context,
+        durableJob,
+        scope: job.scope
+      });
       recordLlmCall({
         callType: "general_reply",
         context,
         durableJob,
         scope: job.scope,
         modelInput: job.modelInput,
-        modelResult
+        modelResult,
+        evidenceCount: modelResult.knowledgeEvidenceCount || 0
       });
       llmLogged = true;
       const reply = clampReply(modelResult.text, config.maxReplyChars);
@@ -1411,6 +1503,7 @@ function createBotRuntime(deps = {}) {
         lineEventLogId: memoryOptions.lineEventLogId,
         includeGroupMentionContext: memoryOptions.includeGroupMentionContext === true,
         memoryStore,
+        knowledgeBaseStore,
         config
       });
       const memoryContext = contextPackage.memory_context;
@@ -1437,6 +1530,17 @@ function createBotRuntime(deps = {}) {
           durationMs: now() - directStartedAt
         };
       }
+      if (!modelResult.fallbackUsed) {
+        modelResult = validateGeneralReply({
+          modelInput,
+          modelResult,
+          memoryContext,
+          routeDecision,
+          policyDecision,
+          context,
+          scope
+        });
+      }
       recordLlmCall({
         callType: "general_direct_reply",
         context: {
@@ -1447,8 +1551,25 @@ function createBotRuntime(deps = {}) {
         scope,
         modelInput,
         modelResult,
-        durationMs: now() - directStartedAt
+        durationMs: now() - directStartedAt,
+        evidenceCount: modelResult.knowledgeEvidenceCount || 0
       });
+
+      if (modelResult.validatorStatus === "fallback") {
+        const reply = clampReply(modelResult.text, config.maxReplyChars);
+        await sendReply(event.replyToken, reply, {
+          ...context,
+          fallback_used: true,
+          fallback_reason: modelResult.validatorReason
+        });
+        log("general_direct_reply_validator_fallback", {
+          ...context,
+          duration_ms: now() - directStartedAt,
+          fallback_used: true,
+          fallback_reason: modelResult.validatorReason
+        });
+        return;
+      }
 
       if (!modelResult.fallbackUsed) {
         const reply = clampReply(modelResult.text, config.maxReplyChars);
@@ -1836,6 +1957,9 @@ function createBotRuntime(deps = {}) {
     durableRetryTimers.clear();
     if (typeof gatewayStore.close === "function") {
       gatewayStore.close();
+    }
+    if (typeof knowledgeBaseStore.close === "function") {
+      knowledgeBaseStore.close();
     }
     return { closed: true };
   }

@@ -1,5 +1,10 @@
 const { budgetMemoryContext } = require("./tokenBudget");
 
+const KB_REQUIRED_INPUT_STYLES = new Set([
+  "technical_question",
+  "planning_request"
+]);
+
 function addSearchStatus(memoryContext, routeDecision, policyDecision) {
   if (routeDecision?.intent !== "general_chat") {
     return memoryContext;
@@ -24,10 +29,68 @@ function addSearchStatus(memoryContext, routeDecision, policyDecision) {
   };
 }
 
+function shouldSearchKnowledgeBase(routeDecision, config) {
+  return (
+    config?.knowledgeBaseEnabled !== false &&
+    routeDecision?.intent === "general_chat"
+  );
+}
+
+function isKnowledgeRequired(routeDecision) {
+  if (routeDecision?.knowledge_required === true) {
+    return true;
+  }
+  return (
+    routeDecision?.intent === "general_chat" &&
+    KB_REQUIRED_INPUT_STYLES.has(routeDecision?.input_style || "")
+  );
+}
+
+function addKnowledgeContext(memoryContext, {
+  modelInput = "",
+  routeDecision = null,
+  knowledgeBaseStore = null,
+  config = {}
+} = {}) {
+  if (
+    !shouldSearchKnowledgeBase(routeDecision, config) ||
+    !knowledgeBaseStore ||
+    typeof knowledgeBaseStore.searchKnowledge !== "function"
+  ) {
+    return memoryContext;
+  }
+
+  const required = isKnowledgeRequired(routeDecision);
+  const limit =
+    Number.isFinite(config.knowledgeBaseMaxResults) && config.knowledgeBaseMaxResults > 0
+      ? config.knowledgeBaseMaxResults
+      : 4;
+  const results = knowledgeBaseStore.searchKnowledge({
+    query: modelInput,
+    limit
+  });
+
+  return {
+    ...(memoryContext || {}),
+    knowledgeContext: results,
+    knowledgeStatus: {
+      searched: true,
+      hit: results.length > 0,
+      required,
+      resultCount: results.length
+    }
+  };
+}
+
 function buildPromptSections(memoryContext = {}) {
   const sections = [];
   if (memoryContext.searchStatus) {
     sections.push("WEB_SEARCH_STATUS");
+  }
+  if (Array.isArray(memoryContext.knowledgeContext) && memoryContext.knowledgeContext.length > 0) {
+    sections.push("KNOWLEDGE_BASE_CONTEXT");
+  } else if (memoryContext.knowledgeStatus?.searched === true) {
+    sections.push("KNOWLEDGE_BASE_STATUS");
   }
   if (Array.isArray(memoryContext.groupMentionContext) && memoryContext.groupMentionContext.length > 0) {
     sections.push("GROUP_RECENT_CONTEXT");
@@ -55,6 +118,7 @@ function buildContextPackage({
   lineEventLogId = null,
   includeGroupMentionContext = false,
   memoryStore,
+  knowledgeBaseStore = null,
   config = {}
 }) {
   if (!memoryStore || typeof memoryStore.loadRelevantMemoryContext !== "function") {
@@ -66,7 +130,13 @@ function buildContextPackage({
     includeGroupMentionContext: includeGroupMentionContext === true
   });
   const guarded = addSearchStatus(loaded, routeDecision, policyDecision);
-  const budgeted = budgetMemoryContext(guarded, config, {
+  const withKnowledge = addKnowledgeContext(guarded, {
+    modelInput,
+    routeDecision,
+    knowledgeBaseStore,
+    config
+  });
+  const budgeted = budgetMemoryContext(withKnowledge, config, {
     currentMessage: modelInput
   });
 
@@ -79,6 +149,9 @@ function buildContextPackage({
 
 module.exports = {
   addSearchStatus,
+  addKnowledgeContext,
   buildContextPackage,
-  buildPromptSections
+  buildPromptSections,
+  isKnowledgeRequired,
+  shouldSearchKnowledgeBase
 };

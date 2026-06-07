@@ -30,6 +30,11 @@ const DEFAULTS = {
   webSearchLmstudioToolsEnabled: false,
   webSearchLmstudioPluginId: "npacker/web-tools",
   webSearchDuckDuckGoFallbackEnabled: false,
+  knowledgeBaseEnabled: true,
+  knowledgeBaseSourceDir: "kb",
+  knowledgeBaseMaxResults: 4,
+  knowledgeBaseChunkChars: 900,
+  knowledgeBaseInsufficientReply: "目前知識庫資料不足，我還不能確定答案。",
   generalPendingReplyText: "思考中",
   generalDirectReplyEnabled: true,
   generalDirectReplyMaxInputChars: 800,
@@ -150,6 +155,26 @@ function readConfig() {
     webSearchDuckDuckGoFallbackEnabled: readBooleanEnv(
       "WEB_SEARCH_DUCKDUCKGO_FALLBACK_ENABLED",
       DEFAULTS.webSearchDuckDuckGoFallbackEnabled
+    ),
+    knowledgeBaseEnabled: readBooleanEnv(
+      "KNOWLEDGE_BASE_ENABLED",
+      DEFAULTS.knowledgeBaseEnabled
+    ),
+    knowledgeBaseSourceDir: readTextEnv(
+      "KNOWLEDGE_BASE_SOURCE_DIR",
+      DEFAULTS.knowledgeBaseSourceDir
+    ),
+    knowledgeBaseMaxResults: readIntEnv(
+      "KNOWLEDGE_BASE_MAX_RESULTS",
+      DEFAULTS.knowledgeBaseMaxResults
+    ),
+    knowledgeBaseChunkChars: readIntEnv(
+      "KNOWLEDGE_BASE_CHUNK_CHARS",
+      DEFAULTS.knowledgeBaseChunkChars
+    ),
+    knowledgeBaseInsufficientReply: readTextEnv(
+      "KNOWLEDGE_BASE_INSUFFICIENT_REPLY",
+      DEFAULTS.knowledgeBaseInsufficientReply
     ),
     generalPendingReplyText: readTextEnv(
       "GENERAL_PENDING_REPLY_TEXT",

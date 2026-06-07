@@ -25,6 +25,15 @@ Sprint 3 adds a gateway layer:
 - `contextBuilder.js`: memory/context assembly and search-status guard.
 - `tokenBudget.js`: char-based context budgeting without a tokenizer dependency.
 
+Sprint 4 adds a local Knowledge Base / RAG MVP:
+
+- Markdown/text KB files live under `kb/`.
+- `npm run kb:import` imports KB chunks into local SQLite FTS5.
+- KB evidence is separate from LINE chat memory.
+- Output Validator prevents unsupported project/technical answers when KB evidence is missing.
+- `npm run kb:unanswered` lists unresolved project/technical questions for future KB updates.
+- No embeddings, vector DB, deployment, or external KB service is used.
+
 Remote LLM endpoints are unsafe by default. Changing `LOCAL_MODEL_BASE_URL` away from `localhost` or `127.0.0.1` can send LINE message content, memory context, or search evidence away from the operator machine and requires explicit manual approval.
 
 ## Defaults
@@ -48,6 +57,10 @@ Remote LLM endpoints are unsafe by default. Changing `LOCAL_MODEL_BASE_URL` away
 - Web search: disabled by default
 - Web-search Reply API result delivery: enabled only when WebSearch is enabled
 - Web-search Push API result delivery: not used by the LINE runtime path
+- Knowledge Base: enabled by default
+- Knowledge Base source directory: `kb`
+- Knowledge Base max results: `4`
+- Knowledge Base chunk chars: `900`
 - LM Studio `npacker/web-tools` search path: disabled by default
 - DuckDuckGo fallback: disabled by default
 - Server port: `3000`
@@ -121,6 +134,11 @@ WEB_SEARCH_PENDING_REPLY_TEXT=資料搜尋中，完成後會補上結果。
 WEB_SEARCH_LMSTUDIO_TOOLS_ENABLED=false
 WEB_SEARCH_LMSTUDIO_PLUGIN_ID=npacker/web-tools
 WEB_SEARCH_DUCKDUCKGO_FALLBACK_ENABLED=false
+KNOWLEDGE_BASE_ENABLED=true
+KNOWLEDGE_BASE_SOURCE_DIR=kb
+KNOWLEDGE_BASE_MAX_RESULTS=4
+KNOWLEDGE_BASE_CHUNK_CHARS=900
+KNOWLEDGE_BASE_INSUFFICIENT_REPLY=目前知識庫資料不足，我還不能確定答案。
 PORT=3000
 ```
 
@@ -130,7 +148,7 @@ Do not commit `.env` or real LINE credentials.
 character hard limit before sending text to LINE, even if `MAX_REPLY_CHARS` is set
 higher.
 
-`WEB_SEARCH_MAX_REPLY_CHARS` controls web-search Push result length separately, so sourced search answers can be longer than normal chat while still staying below LINE's hard safety limit.
+`WEB_SEARCH_MAX_REPLY_CHARS` controls web-search Reply result length separately, so sourced search answers can be longer than normal chat while still staying below LINE's hard safety limit.
 
 ## Endpoints
 
@@ -170,11 +188,19 @@ Web-search manual checks:
 - `記住: 查: 測試` should use the memory command and should not search.
 - Group messages without a bot mention should not search or reply.
 
-Search answers should keep source links clickable, using Markdown link format such as `[OpenAI](https://openai.com/news/)`. If LM Studio returns a bare URL, the bot normalizes it to a short clickable source label before pushing the message to LINE.
+Search answers should keep source links clickable, using Markdown link format such as `[OpenAI](https://openai.com/news/)`. If LM Studio returns a bare URL, the bot normalizes it to a short clickable source label before sending the message to LINE.
+
+Knowledge Base manual checks:
+
+- `npm run kb:import` should import Markdown/text files from `kb/`.
+- Project/technical questions with matching KB chunks may use `KNOWLEDGE_BASE_CONTEXT`.
+- Project/technical questions without KB evidence should fall back to `KNOWLEDGE_BASE_INSUFFICIENT_REPLY`.
+- `npm run kb:unanswered` should list unresolved fallback questions.
+- KB evidence must stay separate from manual memories and LINE chat history.
 
 ## Limits
 
-This MVP does not create a LINE Official Account, retrieve credentials, configure LINE Developers Console, install tunnel tools, deploy hosting, or guarantee model quality.
+This MVP does not create a LINE Official Account, retrieve credentials, configure LINE Developers Console, install tunnel tools, deploy hosting, add embeddings, create a vector DB, or guarantee model quality.
 
 ## Related Safety Docs
 
