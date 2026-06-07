@@ -104,6 +104,7 @@ function applyContextBudget(memoryContext = {}, budget = {}) {
     manualMemories: [],
     summaries: [],
     retrievedEvidence: [],
+    knowledgeContext: [],
     evidence: [],
     groupMentionContext: []
   };
@@ -122,7 +123,11 @@ function applyContextBudget(memoryContext = {}, budget = {}) {
   if (memoryContext.searchStatus) {
     output.searchStatus = memoryContext.searchStatus;
   }
+  if (memoryContext.knowledgeStatus) {
+    output.knowledgeStatus = memoryContext.knowledgeStatus;
+  }
 
+  applySection("knowledgeContext", { maxItemChars: 900 });
   applySection("groupMentionContext", { maxItemChars: 600 });
   applySection("manualMemories", { maxItemChars: 800 });
   applySection("summaries", { maxItemChars: 1000 });
@@ -140,6 +145,7 @@ function applyContextBudget(memoryContext = {}, budget = {}) {
     : null;
 
   const sectionCounts = {
+    knowledgeContext: output.knowledgeContext.length,
     groupMentionContext: output.groupMentionContext.length,
     manualMemories: output.manualMemories.length,
     summaries: output.summaries.length,

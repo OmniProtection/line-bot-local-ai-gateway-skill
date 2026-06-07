@@ -99,6 +99,7 @@ Free does not mean LINE Official Account features, LINE message quotas, hosting,
 - rolling summary / group memory 相關 template capability。
 - Sprint 3 Gateway layer：Intent Router、Policy Gate、Context Builder、Token Budget。
 - Gateway metadata：`input_style`、`risk_level`、`allowed_tools`、`route_reason`、`policy_reason`。
+- Sprint 4 local Knowledge Base / RAG MVP：Markdown/text KB import、SQLite FTS5 retrieval、Output Validator、unanswered questions log。
 - explicit WebSearch commands: `找:` / `搜:` / `查:`。
 - Auto WebSearch Router / SearchPlan v2 config-gated support。
 - WebSearch evidence-first response flow。
@@ -117,7 +118,7 @@ LINE Platform
   -> LINE signature verification
   -> Intent Router / Policy Gate
   -> Context Builder / Token Budget
-  -> memory / WebSearch / model decision
+  -> memory / local KB / WebSearch / model decision
   -> LM Studio on localhost when model output is needed
   -> LINE Reply API or approved Push API response
 ```
@@ -264,6 +265,20 @@ WebSearch 安全原則：
 - 搜尋失敗要明確 fallback。
 
 詳細說明見 [`docs/web-search-safety.md`](docs/web-search-safety.md)。
+
+## Knowledge Base / RAG 摘要
+
+Sprint 4 加入本地 Knowledge Base / RAG MVP：
+
+- KB 來源：`assets/template/kb/` 內的 Markdown / text 文件。
+- 匯入指令：`npm run kb:import --prefix assets/template`。
+- 檢索方式：SQLite FTS5；不使用 embeddings，不使用 vector DB，不安裝新套件。
+- KB evidence 與聊天 memory 分離，避免把群組或私聊記憶誤當正式專案知識。
+- Output Validator 會阻擋沒有 KB evidence 卻聲稱「根據知識庫 / 根據文件」的回答。
+- 專案 / 技術型問題若 KB evidence 不足，會回覆固定保守訊息：`目前知識庫資料不足，我還不能確定答案。`
+- 未回答的專案 / 技術型問題會寫入本機 `unanswered_questions`，可用 `npm run kb:unanswered --prefix assets/template` 盤點。
+
+這仍不是 production-ready RAG。KB 覆蓋率取決於 operator 後續補文件。
 
 ## Safety Model
 
