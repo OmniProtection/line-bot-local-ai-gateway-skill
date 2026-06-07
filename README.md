@@ -4,6 +4,10 @@ Codex Skill + starter template for creating local-first LINE Bot AI gateways wit
 
 本地優先 LINE Bot AI Gateway 的 Codex Skill + Starter Template。
 
+Developer alpha Codex Skill + starter template for building local-first LINE Bot AI gateways with memory, explicit WebSearch, local KB/RAG, handoff workflow, tool confirmation, and safety gates.
+
+面向開發者的本地優先 LINE Bot AI Gateway Skill + Starter Template，支援記憶、WebSearch、本地 KB/RAG、handoff workflow、工具確認與安全閘門。
+
 `LINE Bot Local AI Gateway Skill` 是本專案的公開 Display Name。
 
 中文正式名稱：`LINE Bot 本地 AI Gateway Skill`。
@@ -18,7 +22,7 @@ The current GitHub repository is `OmniProtection/line-bot-local-ai-gateway-skill
 
 ## 這是什麼
 
-這是一個給開發者使用的 Codex Skill + starter template，用來建立或審查本地優先的 LINE Bot AI Gateway。
+這是一個給開發者使用的 Codex Skill + starter template，用來建立或審查本地優先的 LINE Bot AI Gateway。它不是一般 LINE Bot creator，而是把 LINE webhook、local LLM、SQLite memory、explicit WebSearch、本地 KB/RAG、handoff ticket、tool confirmation 與 safety gates 串成可驗證的 developer alpha 技術套件。
 
 它聚焦在：
 
@@ -27,6 +31,9 @@ The current GitHub repository is `OmniProtection/line-bot-local-ai-gateway-skill
 - LM Studio / OpenAI-compatible local LLM。
 - SQLite memory。
 - 明確指令觸發的 WebSearch。
+- 本地 Knowledge Base / RAG MVP。
+- 本地 handoff ticket 與 localhost-only Admin API foundation。
+- Tool Confirmation Gate，避免 LINE 端請求直接執行高風險工具。
 - public hygiene / template verifier / non-live CI。
 - GitHub alpha release 前的安全邊界。
 
