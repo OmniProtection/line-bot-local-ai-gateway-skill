@@ -1,7 +1,9 @@
-# LINE Bot 本地 AI Gateway Creator
+# LINE Bot Local AI Gateway Skill
 
 > 個人的 **本地優先 LINE AI Bot 範本**。  
-> 可串接 LM Studio / 本地 LLM、SQLite 記憶、本地知識庫、明確搜尋指令、人工交接工單與安全閘門。
+> 可串接 LM Studio / 本地 LLM、SQLite 記憶、本地知識庫、明確搜尋指令、SearchPlan 自動判斷、人工交接工單與安全閘門。
+
+中文定位：LINE Bot 本地 AI Gateway Creator。
 
 這個專案的目標很簡單：
 
@@ -21,7 +23,7 @@
 | 公司內部試用 Bot | 先在本機或測試環境驗證，不一開始就把資料丟到雲端 LLM。 |
 | LINE 客服原型 | 建立一個可接 LINE Webhook 的 AI Bot 起點，再依需求改成客服、問答、通知或任務助理。 |
 | 本地知識庫問答 | 用本地 Markdown / 文字檔建立簡單知識庫，不需要先上 vector DB。 |
-| AI 搜尋助理 | 只有在使用者明確輸入 `找:`、`搜:`、`查:` 時才走搜尋流程。 |
+| AI 搜尋助理 | 可用 `找:`、`搜:`、`查:` 強制搜尋，也可用 config-gated SearchPlan 自動判斷需要 current / official / local place / product / price / status 類資料時才搜尋。 |
 
 ---
 
@@ -68,8 +70,10 @@
 - Handoff / Ticket / Admin API foundation。
 - Tool Confirmation Gate，LINE 端要求建立工單時先產生確認碼。
 - Permission Gate，避免 LINE 使用者直接執行 admin tools。
-- 明確 WebSearch 指令：`找:`、`搜:`、`查:`。
-- Auto WebSearch Router / SearchPlan v2 config-gated support。
+- Forced WebSearch 指令：`找:`、`搜:`、`查:`。
+- Auto WebSearch Router / SearchPlan v2 config-gated support，可在一般訊息需要 current / official / local place / product / price / status 類資料時自動規劃搜尋。
+- WebSearch query policy / evidence ranking / safety filter / evidence-first response flow。
+- Optional LM Studio web-tools integration and DuckDuckGo fallback gates。
 - WebSearch Reply API only，不自動用 Push 補送搜尋結果。
 - durable queue / retry / dead-letter supporting code。
 - public hygiene verifier。
@@ -126,7 +130,7 @@ npm start
 - 本地 webhook server 可以啟動。
 - `GET /health` 回傳 `{"ok":true,...}`。
 - `記住: 內容`、`忘記: 關鍵字`、`列出記憶` 可以作為本地記憶指令。
-- `找:`、`搜:`、`查:` 只有在設定允許時才會走搜尋流程。
+- WebSearch 支援 `找:`、`搜:`、`查:` forced search，也支援 config-gated Auto SearchPlan 判斷；兩者都會經過 WebSearch policy checks。
 - Remote LLM endpoint 不會被偷偷接受，必須人工批准。
 
 完整流程請看：[`docs/developer-quickstart.md`](docs/developer-quickstart.md)
@@ -249,6 +253,8 @@ LOCAL_MODEL_REST_BASE_URL=http://127.0.0.1:1234/api/v1
 
 這是高風險變更，應該要由 operator 明確批准。
 
+Remote LLM is unsafe and manual approval required.
+
 設定說明：[`docs/local-llm-setup.md`](docs/local-llm-setup.md)
 
 ---
@@ -277,23 +283,45 @@ Memory command 優先於 LLM chat 與 WebSearch。
 
 ---
 
-## WebSearch 搜尋指令
+## WebSearch 搜尋能力
 
 WebSearch 預設由設定控制。`.env.example` 目前包含：
 
 ```text
 WEB_SEARCH_ENABLED=false
 WEB_SEARCH_AUTO_DECISION_ENABLED=true
+WEB_SEARCH_DECISION_CONFIDENCE_THRESHOLD=0.65
+WEB_SEARCH_DECISION_TIMEOUT_MS=20000
+WEB_SEARCH_LMSTUDIO_TOOLS_ENABLED=false
 WEB_SEARCH_DUCKDUCKGO_FALLBACK_ENABLED=false
 ```
 
-啟用後，明確搜尋指令包含：
+啟用後，目前有兩條搜尋路徑：
+
+1. **Forced WebSearch**：使用者明確輸入 `找:`、`搜:`、`查:`。
+2. **Auto WebSearch / SearchPlan v2**：一般訊息先由 config-gated SearchPlan 判斷是否需要搜尋，再通過 confidence gate、timeout / fallback 與安全規則。
+
+### Forced WebSearch 指令
 
 | 指令 | 狀態 | 行為 |
 | --- | --- | --- |
 | `找: query` / `找：query` | 已實作 | 對 query 執行 WebSearch。 |
 | `搜: query` / `搜：query` | 已實作 | 對 query 執行 WebSearch。 |
 | `查: query` / `查：query` | 已實作 | 對 query 執行 WebSearch。 |
+
+### Auto WebSearch / SearchPlan v2
+
+- 適合 current info、official docs、local places、product specs、price / stock / weather / status、source-grounded questions。
+- 一般聊天不得無限制自動搜尋；auto path 必須先經本地模型 decision、confidence gate、timeout / fallback 與安全規則。
+- Memory command 優先於 WebSearch；forced search command 優先於 general chat。
+- 穩定技術概念、模型名稱、產品型號、公司名等應保留原文，不應被 SearchPlan 改寫壞。
+
+### Evidence / provider path
+
+- LINE runtime 以 deterministic web evidence 為主，再讓 LM Studio 摘要 evidence。
+- `WEB_SEARCH_LMSTUDIO_TOOLS_ENABLED` 可開啟 LM Studio web-tools integration，預設關閉。
+- `WEB_SEARCH_DUCKDUCKGO_FALLBACK_ENABLED` 可開啟 DuckDuckGo fallback，預設關閉。
+- WebSearch answer 使用 `WEB_SEARCH_MAX_REPLY_CHARS`，和一般聊天的 `MAX_REPLY_CHARS` 分開。
 
 安全原則：
 
@@ -419,6 +447,7 @@ scripts/verify_public_hygiene.js
 - Release assets：none。
 - Stable / production-ready：尚未允許宣稱。
 - Production readiness：仍 blocked。
+- Status: Developer alpha. Not stable. Not production ready.
 
 正式 production-ready 前仍需要：
 
@@ -436,6 +465,8 @@ Signature gate 目前是 `STATIC_VERIFIED`，不是 runtime verified。
 ## 免費範圍
 
 Free 指的是：這個 repository 與 local template 可以免費開源使用於本地開發與測試。
+
+Free does not mean LINE Official Account features, LINE message quotas, hosting, domains, SSL certificates, public tunnels, search APIs, model providers, infrastructure, or third-party services are free or unlimited.
 
 Free 不代表：
 
@@ -455,9 +486,13 @@ Free 不代表：
 
 英文名稱：`LINE Bot Local AI Gateway Skill`。
 
+The current repository slug is `line-bot-local-ai-gateway-skill`。
+
 目前 GitHub repository：`OmniProtection/line-bot-local-ai-gateway-skill`。
 
-`local-free-line-bot-creator` 是過去的 repository slug、legacy project identifier、historical identifier 與 compatibility alias，不是目前正式公開名稱。
+`local-free-line-bot-creator` was the previous repository slug、legacy project identifier、historical identifier 與 compatibility alias，不是目前正式公開名稱。
+
+本專案是 **non-official** 的 LINE Bot AI Gateway 開發者工具。This project is not affiliated with, authorized by, sponsored by, or endorsed by LINE Corporation, LY Corporation, or any LINE official product team. It is not official and not an official LINE Bot builder.
 
 ---
 

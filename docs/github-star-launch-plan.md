@@ -7,7 +7,7 @@ This document captures the public launch positioning for `LINE Bot Local AI Gate
 Recommended repository description:
 
 ```text
-本地優先 LINE AI Bot 範本：支援 LM Studio、SQLite 記憶、明確搜尋指令與安全檢查。
+本地優先 LINE AI Bot 範本：支援 LM Studio、SQLite 記憶、明確搜尋指令、SearchPlan 自動判斷與安全檢查。
 ```
 
 Primary audiences:
@@ -48,7 +48,7 @@ Keep topics lowercase and hyphenated.
 
 我開源了一個 LINE Bot Local AI Gateway Skill：
 
-它是一個本地優先的 LINE AI Bot starter template，可以接 LM Studio / OpenAI-compatible local model server，內建 SQLite memory、明確觸發的 web search 指令，以及避免誤提交 secrets 的安全檢查。
+它是一個本地優先的 LINE AI Bot starter template，可以接 LM Studio / OpenAI-compatible local model server，內建 SQLite memory、明確觸發的 web search 指令、config-gated SearchPlan 自動判斷，以及避免誤提交 secrets 的安全檢查。
 
 重點不是取代 LINE Developers Console，而是讓想做本地 AI LINE Bot 的開發者，有一個安全、可檢查、可修改的起點。
 
@@ -59,7 +59,7 @@ https://github.com/OmniProtection/line-bot-local-ai-gateway-skill
 
 I open-sourced LINE Bot Local AI Gateway Skill.
 
-It is a local-first starter template for building LINE AI bots with LM Studio / OpenAI-compatible local model servers, SQLite memory, explicit web-search commands, and safety checks to avoid leaking secrets.
+It is a local-first starter template for building LINE AI bots with LM Studio / OpenAI-compatible local model servers, SQLite memory, explicit web-search commands, config-gated SearchPlan routing, and safety checks to avoid leaking secrets.
 
 It does not replace LINE Developers Console. It gives developers a safer starting point for local AI chatbot prototypes.
 

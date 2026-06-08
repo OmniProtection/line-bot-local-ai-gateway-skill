@@ -4,6 +4,7 @@ All notable changes to this project will be documented here.
 
 ## Unreleased
 
+- Clarified README WebSearch positioning to include forced commands, config-gated Auto SearchPlan routing, evidence ranking, and provider fallback gates.
 - Switched README first-screen positioning, GitHub About wording, and v0.1.1-alpha release notes to Chinese-first copy.
 - Reworked the README first screen into product-style positioning for GitHub discovery.
 - Added a 3-minute demo section, architecture image reference, audience guidance, and GitHub Star launch checklist.
