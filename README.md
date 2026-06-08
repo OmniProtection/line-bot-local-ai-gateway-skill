@@ -1,4 +1,4 @@
-# LINE Bot 本地 AI Gateway Creater
+# LINE Bot 本地 AI Gateway Creator
 
 > 個人的 **本地優先 LINE AI Bot 範本**。  
 > 可串接 LM Studio / 本地 LLM、SQLite 記憶、本地知識庫、明確搜尋指令、人工交接工單與安全閘門。
