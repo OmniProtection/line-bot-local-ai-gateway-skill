@@ -4,6 +4,9 @@ All notable changes to this project will be documented here.
 
 ## Unreleased
 
+- Reworked the README first screen into product-style positioning for GitHub discovery.
+- Added a 3-minute demo section, architecture image reference, audience guidance, and GitHub Star launch checklist.
+- Added v0.1.1-alpha release notes for README/demo launch improvements.
 - Added Sprint 6 Tool Confirmation Gate with local tool registry, permission gate, confirmation store, and agent-lite explicit tool planning.
 - Added pending confirmation flow for explicit local handoff-ticket requests before creating a ticket.
 - Added Admin API permission checks for read-only ticket list/get tools.

@@ -1,12 +1,101 @@
 # LINE Bot Local AI Gateway Skill
 
-Codex Skill + starter template for creating local-first LINE Bot AI gateways with LM Studio, SQLite memory, explicit web search, and safety gates.
+Build a local-first LINE AI bot with LM Studio, SQLite memory, and explicit web search - without exposing your local LLM or secrets.
 
-本地優先 LINE Bot AI Gateway 的 Codex Skill + Starter Template。
+用 LM Studio + SQLite + LINE Webhook，快速建立本地優先的 LINE AI Bot 範本，支援記憶、明確搜尋指令與安全檢查。
 
-Developer alpha Codex Skill + starter template for building local-first LINE Bot AI gateways with memory, explicit WebSearch, local KB/RAG, handoff workflow, tool confirmation, and safety gates.
+Local-first starter template for building LINE AI bots with LM Studio, SQLite memory, explicit web search, and safety gates.
 
-面向開發者的本地優先 LINE Bot AI Gateway Skill + Starter Template，支援記憶、WebSearch、本地 KB/RAG、handoff workflow、工具確認與安全閘門。
+## Why this exists
+
+Most LINE AI bot examples assume cloud LLM APIs or unsafe secret handling. This project gives developers a local-first, inspectable, safety-focused starting point.
+
+我讓你 10 秒看懂、3 分鐘開始、30 分鐘改成自己的 LINE AI Bot。
+
+| What you get | Why developers may star it |
+| --- | --- |
+| Local-first LINE Bot | Build a LINE AI bot prototype without sending every step to the cloud. |
+| LM Studio / OpenAI-compatible | Use a local model server without being locked to OpenAI. |
+| Safety gates / no secrets | Start from an open template designed to avoid accidental key leaks. |
+
+## Features
+
+- LINE webhook starter template.
+- LM Studio / OpenAI-compatible local model server.
+- SQLite memory.
+- Explicit web search commands.
+- Secret hygiene checks.
+- Non-live CI validation.
+- Codex Skill workflow support.
+
+## 3-Minute Demo
+
+1. Clone this repo.
+2. Copy `assets/template` into your own local bot project.
+3. Run zero-secret checks.
+4. Start the LM Studio local server.
+5. Start the webhook server from the copied project.
+6. Send a local test event or check `GET /health`.
+
+```bash
+git clone https://github.com/OmniProtection/line-bot-local-ai-gateway-skill.git
+cd line-bot-local-ai-gateway-skill
+node scripts/verify_public_hygiene.js
+node scripts/verify_linebot_project.js assets/template
+npm run check --prefix assets/template
+```
+
+Then create and run a separate local bot project:
+
+```bash
+cp -R assets/template ../line-bot-local-demo
+cd ../line-bot-local-demo
+cp .env.example .env
+npm install
+npm start
+```
+
+PowerShell equivalent:
+
+```powershell
+Copy-Item -Recurse assets\template ..\line-bot-local-demo
+Set-Location ..\line-bot-local-demo
+Copy-Item .env.example .env
+npm install
+npm start
+```
+
+Expected result:
+
+- `/health` returns `{"ok":true,...}` after the copied webhook server is running.
+- Memory commands such as `記住: 內容` and `列出記憶` work in the local bot project.
+- Explicit search commands are gated behind `找:` / `搜:` / `查:` and WebSearch policy checks.
+- Remote LLM endpoints are rejected unless manually approved.
+
+Full setup: [`docs/developer-quickstart.md`](docs/developer-quickstart.md).
+
+## Architecture
+
+![LINE Bot local AI gateway demo flow](docs/images/demo-flow.png)
+
+```text
+LINE -> Webhook -> Safety Gate -> Memory/Search/LLM Router -> LM Studio
+```
+
+Public tunnels should only point to the webhook server. Do not expose the LM Studio port.
+
+## Who should use this
+
+- Developers building LINE Bot + AI prototypes.
+- Developers testing LM Studio or another OpenAI-compatible local model server.
+- Developers who care about local-first memory, privacy boundaries, and secret safety.
+
+## What this is not
+
+- Not an official LINE product.
+- Not a hosted SaaS bot builder.
+- Not a LINE Developers Console replacement.
+- Not production-ready without your own runtime, credentials, tunnel, monitoring, and approval evidence.
 
 `LINE Bot Local AI Gateway Skill` 是本專案的公開 Display Name。
 
@@ -19,6 +108,8 @@ The current GitHub repository is `OmniProtection/line-bot-local-ai-gateway-skill
 `local-free-line-bot-creator` was the previous repository slug, legacy project identifier, historical identifier, and compatibility alias. It is not the current repository slug or the public display name.
 
 本專案是 **non-official** 的 LINE Bot AI Gateway 開發者工具。This project is not affiliated with, authorized by, sponsored by, or endorsed by LINE Corporation, LY Corporation, or any LINE official product team. It is not official and not an official LINE Bot builder.
+
+Launch positioning, suggested GitHub topics, and announcement copy are tracked in [`docs/github-star-launch-plan.md`](docs/github-star-launch-plan.md).
 
 ## 這是什麼
 
