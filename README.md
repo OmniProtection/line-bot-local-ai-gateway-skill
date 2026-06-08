@@ -1,41 +1,41 @@
 # LINE Bot Local AI Gateway Skill
 
-Build a local-first LINE AI bot with LM Studio, SQLite memory, and explicit web search - without exposing your local LLM or secrets.
-
 用 LM Studio + SQLite + LINE Webhook，快速建立本地優先的 LINE AI Bot 範本，支援記憶、明確搜尋指令與安全檢查。
 
-Local-first starter template for building LINE AI bots with LM Studio, SQLite memory, explicit web search, and safety gates.
-
-## Why this exists
-
-Most LINE AI bot examples assume cloud LLM APIs or unsafe secret handling. This project gives developers a local-first, inspectable, safety-focused starting point.
+Build a local-first LINE AI bot with LM Studio, SQLite memory, and explicit web search - without exposing your local LLM or secrets.
 
 我讓你 10 秒看懂、3 分鐘開始、30 分鐘改成自己的 LINE AI Bot。
 
-| What you get | Why developers may star it |
+## 為什麼做這個
+
+多數 LINE AI Bot 範例預設使用雲端 LLM API，或沒有把 secret / 本機模型 / 搜尋權限邊界講清楚。本專案提供一個本地優先、可檢查、重視安全閘門的起點。
+
+Most LINE AI bot examples assume cloud LLM APIs or unsafe secret handling. This project gives developers a local-first, inspectable, safety-focused starting point.
+
+| 你得到什麼 | 為什麼值得 Star |
 | --- | --- |
-| Local-first LINE Bot | Build a LINE AI bot prototype without sending every step to the cloud. |
-| LM Studio / OpenAI-compatible | Use a local model server without being locked to OpenAI. |
-| Safety gates / no secrets | Start from an open template designed to avoid accidental key leaks. |
+| Local-first LINE Bot | 想做 LINE AI Bot，但不想所有訊息和模型請求都丟到雲端。 |
+| LM Studio / OpenAI-compatible | 可接本地模型 server，不綁 OpenAI。 |
+| Safety gates / no secrets | 開源模板先把 secret、remote LLM、WebSearch 風險邊界講清楚。 |
 
-## Features
+## 功能亮點
 
-- LINE webhook starter template.
-- LM Studio / OpenAI-compatible local model server.
-- SQLite memory.
-- Explicit web search commands.
-- Secret hygiene checks.
-- Non-live CI validation.
-- Codex Skill workflow support.
+- LINE webhook starter template。
+- LM Studio / OpenAI-compatible local model server。
+- SQLite memory。
+- 明確指令觸發的 WebSearch。
+- Secret hygiene checks。
+- Non-live CI validation。
+- Codex Skill workflow support。
 
-## 3-Minute Demo
+## 3 分鐘 Demo
 
-1. Clone this repo.
-2. Copy `assets/template` into your own local bot project.
-3. Run zero-secret checks.
-4. Start the LM Studio local server.
-5. Start the webhook server from the copied project.
-6. Send a local test event or check `GET /health`.
+1. Clone 這個 repo。
+2. 把 `assets/template` 複製成自己的本地 bot 專案。
+3. 跑 zero-secret checks。
+4. 啟動 LM Studio local server。
+5. 從複製出來的專案啟動 webhook server。
+6. 送本地測試事件或檢查 `GET /health`。
 
 ```bash
 git clone https://github.com/OmniProtection/line-bot-local-ai-gateway-skill.git
@@ -45,7 +45,7 @@ node scripts/verify_linebot_project.js assets/template
 npm run check --prefix assets/template
 ```
 
-Then create and run a separate local bot project:
+接著建立並啟動獨立的本地 bot 專案：
 
 ```bash
 cp -R assets/template ../line-bot-local-demo
@@ -55,7 +55,7 @@ npm install
 npm start
 ```
 
-PowerShell equivalent:
+PowerShell 版本：
 
 ```powershell
 Copy-Item -Recurse assets\template ..\line-bot-local-demo
@@ -65,16 +65,16 @@ npm install
 npm start
 ```
 
-Expected result:
+預期結果：
 
-- `/health` returns `{"ok":true,...}` after the copied webhook server is running.
-- Memory commands such as `記住: 內容` and `列出記憶` work in the local bot project.
-- Explicit search commands are gated behind `找:` / `搜:` / `查:` and WebSearch policy checks.
-- Remote LLM endpoints are rejected unless manually approved.
+- 複製出來的 webhook server 啟動後，`/health` 回傳 `{"ok":true,...}`。
+- `記住: 內容`、`列出記憶` 等 memory commands 可在本地 bot 專案運作。
+- `找:` / `搜:` / `查:` 這類明確搜尋指令會經過 WebSearch policy checks。
+- Remote LLM endpoint 沒有人工批准時會被拒絕。
 
-Full setup: [`docs/developer-quickstart.md`](docs/developer-quickstart.md).
+完整流程：[`docs/developer-quickstart.md`](docs/developer-quickstart.md)。
 
-## Architecture
+## 架構
 
 ![LINE Bot local AI gateway demo flow](docs/images/demo-flow.png)
 
@@ -82,20 +82,20 @@ Full setup: [`docs/developer-quickstart.md`](docs/developer-quickstart.md).
 LINE -> Webhook -> Safety Gate -> Memory/Search/LLM Router -> LM Studio
 ```
 
-Public tunnels should only point to the webhook server. Do not expose the LM Studio port.
+公開 tunnel 只能指向 webhook server。不要把 LM Studio port 暴露出去。
 
-## Who should use this
+## 適合誰
 
-- Developers building LINE Bot + AI prototypes.
-- Developers testing LM Studio or another OpenAI-compatible local model server.
-- Developers who care about local-first memory, privacy boundaries, and secret safety.
+- 想做 LINE Bot + AI prototype 的開發者。
+- 想測 LM Studio 或其他 OpenAI-compatible local model server 的開發者。
+- 在意 local-first memory、privacy boundary、secret safety 的開發者。
 
-## What this is not
+## 這不是什麼
 
-- Not an official LINE product.
-- Not a hosted SaaS bot builder.
-- Not a LINE Developers Console replacement.
-- Not production-ready without your own runtime, credentials, tunnel, monitoring, and approval evidence.
+- 不是 LINE 官方產品。
+- 不是 hosted SaaS bot builder。
+- 不是 LINE Developers Console replacement。
+- 沒有你的 runtime、credentials、tunnel、monitoring、approval evidence 時，不是 production-ready。
 
 `LINE Bot Local AI Gateway Skill` 是本專案的公開 Display Name。
 
@@ -109,7 +109,7 @@ The current GitHub repository is `OmniProtection/line-bot-local-ai-gateway-skill
 
 本專案是 **non-official** 的 LINE Bot AI Gateway 開發者工具。This project is not affiliated with, authorized by, sponsored by, or endorsed by LINE Corporation, LY Corporation, or any LINE official product team. It is not official and not an official LINE Bot builder.
 
-Launch positioning, suggested GitHub topics, and announcement copy are tracked in [`docs/github-star-launch-plan.md`](docs/github-star-launch-plan.md).
+GitHub launch positioning、建議 topics 與發布文案記錄在 [`docs/github-star-launch-plan.md`](docs/github-star-launch-plan.md)。
 
 ## 這是什麼
 

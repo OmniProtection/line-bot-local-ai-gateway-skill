@@ -7,7 +7,7 @@ This document captures the public launch positioning for `LINE Bot Local AI Gate
 Recommended repository description:
 
 ```text
-Local-first LINE AI Bot starter template with LM Studio, SQLite memory, explicit web search, and safety checks.
+本地優先 LINE AI Bot 範本：支援 LM Studio、SQLite 記憶、明確搜尋指令與安全檢查。
 ```
 
 Primary audiences:
